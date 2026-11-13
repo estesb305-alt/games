@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rack-O</title>
+<meta name="description" content="The classic card game Rack-O: get all 10 cards in order before the computer does.">
+<meta name="theme-color" content="#2C6C70">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-48.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Rack-O">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   DESIGN TOKENS
+   Light values on :root, dark values for dark preference
+   and for an explicit data-theme="dark".
+   ========================================================= */
+:root{
+  --bg:#E4ECEE; --surface:#F6F9F9; --ink:#1A2A33; --muted:#566871; --line:#C5D3D7;
+  --rack:#2C6C70; --rack-deep:#21545A; --groove:#1F5156; --slotnum:#CFE6E4;
+  --accent:#E3A22A; --accent-ink:#2A1C00;
+  --ok:#2FA56E; --ok-soft:rgba(56,178,122,.32);
+  --card:#FFFDF8; --back:#2C6C70; --back-2:#3E8A8E;
+  --shadow:0 2px 0 rgba(20,40,50,.18), 0 6px 14px rgba(20,40,50,.14);
+  --display:"Bungee","Arial Black",Impact,system-ui,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12202A; --surface:#1A2B36; --ink:#E8F0F2; --muted:#9AB0BA; --line:#2E4654;
+    --rack:#245A5E; --rack-deep:#1A4448; --groove:#163C40; --slotnum:#A9D3CF;
+    --accent:#F0B544; --accent-ink:#2A1C00;
+    --ok:#46C98C; --ok-soft:rgba(70,201,140,.28);
+    --card:#FBF7EE; --back:#245A5E; --back-2:#357A7E;
+    --shadow:0 2px 0 rgba(0,0,0,.4), 0 8px 18px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12202A; --surface:#1A2B36; --ink:#E8F0F2; --muted:#9AB0BA; --line:#2E4654;
+  --rack:#245A5E; --rack-deep:#1A4448; --groove:#163C40; --slotnum:#A9D3CF;
+  --accent:#F0B544; --accent-ink:#2A1C00;
+  --ok:#46C98C; --ok-soft:rgba(70,201,140,.28);
+  --card:#FBF7EE; --back:#245A5E; --back-2:#357A7E;
+  --shadow:0 2px 0 rgba(0,0,0,.4), 0 8px 18px rgba(0,0,0,.35);
+  color-scheme:dark;
+}
+
+/* =========================================================
+   BASE
+   ========================================================= */
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.45;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.table,.topbar{-webkit-user-select:none;user-select:none}
+body{overscroll-behavior-y:none}
+.install-tip{font-size:.88rem;color:var(--muted);background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:12px;padding:10px 12px;margin:0 0 14px}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.app{max-width:1120px;margin:0 auto;padding:14px clamp(10px,3vw,28px) 32px}
+
+/* ---------- Top bar ---------- */
+.topbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
+.logo{
+  font-family:var(--display);font-weight:400;margin:0;line-height:1;
+  font-size:clamp(1.9rem,5.5vw,2.7rem);color:var(--ink);
+  /* stepped rainbow shadow: the same color ramp as the cards */
+  text-shadow:2px 2px 0 hsl(205 70% 55%),4px 4px 0 hsl(140 55% 45%),6px 6px 0 hsl(48 85% 55%),8px 8px 0 hsl(12 80% 56%);
+  padding:0 8px 8px 0;
+}
+.scores{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:200px}
+.chip{display:inline-flex;gap:6px;align-items:baseline;padding:.3em .8em;border-radius:999px;background:var(--surface);border:2px solid var(--line);font-size:.9rem}
+.chip b{font-weight:800}
+.chip .pts{font-variant-numeric:tabular-nums}
+.chip.turn{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 18%,var(--surface))}
+.goal-chip{color:var(--muted);font-size:.85rem;align-self:center}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font-weight:700;font-size:.92rem;border:2px solid var(--ink);background:var(--surface);color:var(--ink);border-radius:999px;padding:.45em 1.05em;cursor:pointer}
+.btn:hover{background:color-mix(in srgb,var(--ink) 8%,var(--surface))}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent-ink);color:var(--accent-ink)}
+.btn.primary:hover{background:color-mix(in srgb,var(--accent) 85%,#fff)}
+
+/* ---------- Table layout ---------- */
+.table{
+  display:grid;gap:18px;margin-top:18px;align-items:start;
+  grid-template-columns:minmax(270px,360px) 1fr;
+  grid-template-areas:"opp rack" "piles rack" "log rack";
+}
+#opponents{grid-area:opp}
+.piles{grid-area:piles}
+.log{grid-area:log}
+.player{grid-area:rack}
+@media (max-width:780px){
+  .table{grid-template-columns:1fr;grid-template-areas:"opp" "piles" "rack" "log";gap:10px;margin-top:12px}
+  .panel{padding:11px}
+  .btn{font-size:.85rem;padding:.38em .9em}
+  .mini-row{height:5px}
+  .opp{padding:6px}
+  .status{margin-bottom:8px;font-size:.93rem}
+  .pile-btn,.held-zone{width:60px}
+  .pcard.face{font-size:1.5rem}
+  .rack{gap:4px;padding:8px}
+  .track{height:33px}
+  .bar{font-size:1.08rem;top:3px;bottom:3px}
+}
+.panel{background:var(--surface);border:2px solid var(--line);border-radius:18px;padding:14px}
+
+/* ---------- Opponents ---------- */
+.opps{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
+.opp{background:var(--surface);border:2px solid var(--line);border-radius:14px;padding:8px 8px 9px;transition:border-color .2s}
+.opp.turn{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 35%,transparent)}
+.opp-head{display:flex;justify-content:space-between;gap:6px;font-weight:800;font-size:.9rem}
+.opp-head .pts{font-variant-numeric:tabular-nums;color:var(--muted)}
+.mini{display:grid;gap:2px;margin-top:6px;background:var(--rack);padding:4px;border-radius:7px}
+.mini-row{position:relative;height:9px;background:var(--groove);border-radius:2px;transition:height .3s}
+.mini-card{position:absolute;top:0;bottom:0;border-radius:2px}
+.mini-card.back{left:0;width:40%;background:repeating-linear-gradient(135deg,var(--back-2) 0 3px,var(--card) 3px 5px)}
+.opp.revealed .mini-row{height:17px}
+.mini-card.face{
+  width:40%;left:calc(var(--pos)*60%);background:var(--card);
+  border-left:4px solid hsl(var(--h) 70% 52%);
+  font:400 10px/17px var(--display);color:hsl(var(--h) 55% 28%);padding-left:3px;
+}
+.opp-note{font-size:.78rem;color:var(--muted);margin-top:5px}
+
+/* ---------- Piles ---------- */
+.status{margin:0 0 12px;font-weight:600;min-height:2.9em}
+.pile-row{display:flex;justify-content:center;gap:clamp(12px,4vw,22px);align-items:flex-start}
+.pile{display:flex;flex-direction:column;align-items:center;gap:7px;font-size:.84rem;color:var(--muted);font-weight:600;text-align:center}
+.pile-btn{position:relative;width:clamp(66px,19vw,86px);aspect-ratio:5/7;border:none;padding:0;background:none;cursor:pointer;border-radius:10px}
+.pile-btn:disabled{cursor:default}
+.pile-btn.can::after{
+  content:"";position:absolute;inset:-6px;border:3px solid var(--accent);border-radius:14px;pointer-events:none;
+  animation:breathe 1.8s ease-in-out infinite;
+}
+.pile-btn.hinted::after{border-width:4px;animation-duration:.8s}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.35}}
+.held-zone{position:relative;width:clamp(66px,19vw,86px);aspect-ratio:5/7}
+
+/* A playing card, portrait */
+.pcard{position:absolute;inset:0;border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+.pcard.face{
+  background:var(--card);border:2px solid hsl(var(--h) 60% 46%);
+  display:grid;place-items:center;
+  font-family:var(--display);color:hsl(var(--h) 55% 27%);font-size:clamp(1.55rem,5.5vw,2.1rem);
+}
+.pcard.face::before{content:"";position:absolute;left:0;right:0;top:0;height:22%;background:hsl(var(--h) 70% 55%)}
+.pcard.face span{position:relative;top:.18em}
+.pcard.back{background:repeating-linear-gradient(135deg,var(--back) 0 8px,var(--back-2) 8px 16px);border:3px solid var(--card)}
+.pcard.back::after{content:"R";position:absolute;inset:0;display:grid;place-items:center;font-family:var(--display);color:var(--card);font-size:1.7rem;text-shadow:0 2px 0 rgba(0,0,0,.3)}
+.pcard.empty{border:2px dashed var(--line);box-shadow:none;display:grid;place-items:center;color:var(--muted);font-size:.78rem;padding:4px}
+.deck .pcard.back{box-shadow:2px 2px 0 var(--card),3px 3px 0 var(--back-2),5px 5px 0 var(--card),6px 6px 0 var(--back-2),var(--shadow);overflow:visible}
+.discard-stack .pcard.face{box-shadow:-2px 2px 0 var(--line),var(--shadow)}
+
+/* Card in flight (animations) */
+.flyer{position:fixed;inset:auto;z-index:40;pointer-events:none;margin:0}
+
+/* ---------- Log ---------- */
+.log h2{font-family:var(--display);font-weight:400;font-size:1rem;margin:0}
+.log ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:5px;font-size:.9rem;color:var(--muted)}
+.log li:first-child{color:var(--ink);font-weight:600}
+
+/* ---------- Player rack ---------- */
+.rack-head{display:flex;justify-content:space-between;align-items:baseline;gap:6px 12px;flex-wrap:wrap}
+.rack-head h2{font-family:var(--display);font-weight:400;font-size:1.2rem;margin:0}
+.progress{color:var(--muted);font-weight:600;font-size:.95rem}
+.progress.good{color:var(--ok)}
+.scale{display:grid;grid-template-columns:2.2em 1fr;gap:8px;padding:10px 10px 4px;font-size:.78rem;font-weight:600;color:var(--muted)}
+.scale span:last-child{display:flex;justify-content:space-between}
+.rack{
+  list-style:none;margin:0;padding:10px;display:grid;gap:6px;border-radius:14px;
+  background:linear-gradient(var(--rack),var(--rack-deep));
+  box-shadow:inset 0 -5px 0 rgba(0,0,0,.22),inset 0 2px 0 rgba(255,255,255,.12);
+}
+.slot{display:grid;grid-template-columns:2.2em 1fr;align-items:center;gap:8px;width:100%;padding:0;border:none;background:none;text-align:left;cursor:default}
+.rack.holding .slot{cursor:pointer}
+.slot:disabled{opacity:1}
+.slotnum{font-family:var(--display);color:var(--slotnum);text-align:center;font-size:1.02rem;transition:color .3s}
+.track{
+  --cw:clamp(58px,22%,108px);
+  position:relative;display:block;height:clamp(36px,5vh,46px);
+  background:var(--groove);border-radius:8px;box-shadow:inset 0 3px 5px rgba(0,0,0,.38);
+  transition:background-color .3s;
+}
+/* Faint dot: where a "perfect" card for this slot would sit */
+.tick{position:absolute;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:rgba(255,255,255,.28);
+  left:calc(var(--pos)*(100% - var(--cw)) + var(--cw)/2 - 3px)}
+.bar{
+  position:absolute;top:4px;bottom:4px;width:var(--cw);left:calc(var(--pos)*(100% - var(--cw)));
+  display:flex;align-items:center;gap:8px;overflow:hidden;
+  background:var(--card);border-radius:6px;box-shadow:0 2px 0 rgba(0,0,0,.28);
+  font-family:var(--display);font-size:1.22rem;color:hsl(var(--h) 55% 27%);
+  transition:opacity .15s,box-shadow .3s;
+}
+.bar::before{content:"";align-self:stretch;width:11px;flex:none;background:hsl(var(--h) 70% 53%)}
+.slot.inorder .track{background:linear-gradient(var(--ok-soft),var(--ok-soft)),var(--groove)}
+.slot.inorder .bar.real{box-shadow:0 0 0 3px var(--ok),0 2px 0 rgba(0,0,0,.28)}
+.slot.inorder .slotnum{color:var(--ok)}
+.bar.ghost{opacity:0;border:2px dashed var(--accent);box-shadow:none;z-index:2;pointer-events:none}
+.rack.holding .slot:hover .bar.ghost,.rack.holding .slot:focus-visible .bar.ghost{opacity:.95}
+.rack.holding .slot:hover .bar.real,.rack.holding .slot:focus-visible .bar.real{opacity:.4}
+.rack.holding .slot:hover .track{outline:2px solid var(--accent);outline-offset:1px}
+.slot.hinted .track{outline:3px solid var(--accent);outline-offset:2px;animation:breathe .9s ease-in-out infinite}
+.rack.deal .bar.real{animation:dealIn .45s cubic-bezier(.2,.8,.2,1) both}
+@keyframes dealIn{from{transform:translateX(-30px);opacity:0}to{transform:none;opacity:1}}
+.bar.pop{animation:pop .45s cubic-bezier(.2,.9,.3,1.4)}
+@keyframes pop{0%{transform:scale(1.18)}100%{transform:scale(1)}}
+
+/* ---------- Dialogs ---------- */
+dialog{border:none;border-radius:20px;padding:0;width:min(540px,92vw);max-height:88vh;background:var(--surface);color:var(--ink);box-shadow:0 24px 70px rgba(0,0,0,.4)}
+dialog::backdrop{background:rgba(8,18,24,.6)}
+.dlg{padding:22px 22px 20px}
+.dlg h2{font-family:var(--display);font-weight:400;font-size:1.55rem;margin:0 0 6px}
+.dlg p{margin:0 0 12px}
+.dlg .lede{color:var(--muted)}
+fieldset{border:none;padding:0;margin:0 0 16px}
+legend{font-weight:800;margin-bottom:7px;padding:0}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg label{position:relative}
+.seg input{position:absolute;opacity:0;width:1px;height:1px}
+.seg span{display:inline-block;padding:.42em .95em;border:2px solid var(--line);border-radius:999px;font-weight:600;cursor:pointer}
+.seg input:checked + span{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.seg input:focus-visible + span{outline:3px solid var(--accent);outline-offset:2px}
+.seg-note{font-size:.84rem;color:var(--muted);margin-top:6px}
+.dlg-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
+.help-list{padding-left:1.15em;margin:0 0 14px}
+.help-list li{margin-bottom:8px}
+.summary{overflow-x:auto}
+.summary table{width:100%;border-collapse:collapse;font-size:.93rem}
+.summary th,.summary td{padding:8px 6px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+.summary th{font-size:.82rem;color:var(--muted);font-weight:700}
+.summary .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.summary .win td{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.seq{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+.seq i{font-style:normal;font-size:.75rem;min-width:1.8em;text-align:center;padding:1px 3px;border-radius:4px;background:color-mix(in srgb,var(--ink) 8%,transparent);font-variant-numeric:tabular-nums}
+.seq i.ok{background:var(--ok-soft);color:var(--ink);font-weight:800}
+
+/* ---------- Celebration ---------- */
+.celebrate{position:fixed;inset:0;z-index:50;pointer-events:none;display:grid;place-items:center;overflow:hidden}
+.celebrate[hidden]{display:none}
+.burst{position:absolute;width:160vmax;height:160vmax;border-radius:50%;
+  background:repeating-conic-gradient(hsl(205 70% 55% / .22) 0 10deg,transparent 10deg 20deg,hsl(48 85% 55% / .22) 20deg 30deg,transparent 30deg 40deg,hsl(12 80% 56% / .22) 40deg 50deg,transparent 50deg 60deg)}
+.stamp{position:relative;font-family:var(--display);font-size:clamp(3.4rem,17vw,9.5rem);line-height:1;color:var(--accent);text-align:center;transform:rotate(-8deg);
+  text-shadow:3px 3px 0 hsl(205 70% 50%),6px 6px 0 hsl(140 55% 42%),9px 9px 0 hsl(12 80% 52%),0 0 40px rgba(0,0,0,.3)}
+.stamp small{display:block;font-family:var(--body);font-weight:800;font-size:clamp(1rem,3.5vw,1.6rem);color:var(--ink);text-shadow:none;margin-top:10px;
+  background:var(--surface);border-radius:999px;padding:.3em 1em;width:max-content;margin-inline:auto}
+.confetti{position:absolute;top:0;width:26px;height:36px;border-radius:4px;background:var(--card);border-top:9px solid hsl(var(--h) 70% 55%);
+  font:400 11px/22px var(--display);color:hsl(var(--h) 55% 30%);text-align:center;box-shadow:0 2px 4px rgba(0,0,0,.25)}
+
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ================= Top bar ================= -->
+  <header class="topbar">
+    <h1 class="logo">Rack-O</h1>
+    <div class="scores" id="scores" aria-label="Scores"></div>
+    <div class="actions">
+      <button class="btn" id="installBtn" hidden>Install app</button>
+      <button class="btn" id="hintBtn" disabled>Hint</button>
+      <button class="btn" id="helpBtn">How to play</button>
+      <button class="btn primary" id="newBtn">New game</button>
+    </div>
+  </header>
+
+  <!-- ================= Table ================= -->
+  <main class="table">
+    <section id="opponents" aria-label="Computer players"><div class="opps" id="opps"></div></section>
+
+    <section class="piles panel" aria-label="Deck and discard pile">
+      <p class="status" id="status" aria-live="polite">Choose your game settings to start.</p>
+      <div class="pile-row">
+        <div class="pile deck">
+          <button class="pile-btn" id="deck" aria-label="Draw from the deck" disabled></button>
+          <span id="deckCount">Deck</span>
+        </div>
+        <div class="pile discard-stack">
+          <button class="pile-btn" id="discard" aria-label="Discard pile" disabled></button>
+          <span id="discardLabel">Discard</span>
+        </div>
+        <div class="pile">
+          <div class="held-zone" id="held"></div>
+          <span>Your card</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="player panel" aria-label="Your rack">
+      <div class="rack-head">
+        <h2>Your rack</h2>
+        <span class="progress" id="progress"></span>
+      </div>
+      <div class="scale" aria-hidden="true"><span></span><span><span>1, low</span><span id="scaleMax">40, high</span></span></div>
+      <ol class="rack" id="rack"></ol>
+    </section>
+
+    <section class="log panel" aria-label="Game log">
+      <h2>What happened</h2>
+      <ul id="log"></ul>
+    </section>
+  </main>
+</div>
+
+<!-- ================= Setup dialog ================= -->
+<dialog id="setupDlg" aria-labelledby="setupTitle">
+  <div class="dlg">
+    <h2 id="setupTitle">New game</h2>
+    <p class="lede">Line up all 10 cards from low to high before anyone else does.</p>
+    <fieldset>
+      <legend>Computer opponents</legend>
+      <div class="seg">
+        <label><input type="radio" name="opp" value="1"><span>1</span></label>
+        <label><input type="radio" name="opp" value="2"><span>2</span></label>
+        <label><input type="radio" name="opp" value="3"><span>3</span></label>
+      </div>
+      <div class="seg-note" id="deckNote"></div>
+    </fieldset>
+    <fieldset>
+      <legend>Difficulty</legend>
+      <div class="seg">
+        <label><input type="radio" name="diff" value="easy"><span>Easy</span></label>
+        <label><input type="radio" name="diff" value="medium"><span>Medium</span></label>
+        <label><input type="radio" name="diff" value="hard"><span>Hard</span></label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Play to</legend>
+      <div class="seg">
+        <label><input type="radio" name="target" value="200"><span>200</span></label>
+        <label><input type="radio" name="target" value="300"><span>300</span></label>
+        <label><input type="radio" name="target" value="500"><span>500</span></label>
+      </div>
+      <div class="seg-note">500 is the official score. Lower numbers make shorter games.</div>
+    </fieldset>
+    <div class="dlg-actions">
+      <button class="btn" id="setupCancel">Keep playing</button>
+      <button class="btn primary" id="setupStart">Deal the cards</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- ================= Help dialog ================= -->
+<dialog id="helpDlg" aria-labelledby="helpTitle">
+  <div class="dlg">
+    <h2 id="helpTitle">How to play</h2>
+    <ol class="help-list">
+      <li><b>The goal.</b> Get all 10 cards in your rack in order, lowest in slot 1 and highest in slot 10. The first player to do it calls Rack-O and ends the round.</li>
+      <li><b>Your turn.</b> Take the top card of the discard pile, or draw from the deck. A card from the discard pile has to go into your rack. A card from the deck can go in, or you can throw it away on the discard pile.</li>
+      <li><b>Swapping.</b> Tap a slot to put your card there. The card it replaces goes face up on the discard pile. You can never rearrange the cards in your rack.</li>
+      <li><b>Scoring.</b> You get 5 points for each card in order, counting from slot 1 until the order breaks. Calling Rack-O is worth 75 points. The first player to reach <span id="helpTarget">500</span> wins.</li>
+      <li><b>Tip.</b> Put each card where its number belongs. With <span id="helpMax">40</span> cards, a card in the middle of that range belongs near the middle of your rack. The faint dots in your rack mark those spots, and the green slots are the ones already in order.</li>
+    </ol>
+    <p class="install-tip" id="iosTip" hidden>To install Rack-O on your iPhone or iPad, tap the Share button in Safari, then choose “Add to Home Screen.” It will open full screen and work offline.</p>
+    <div class="dlg-actions"><button class="btn primary" id="helpClose">Got it</button></div>
+  </div>
+</dialog>
+
+<!-- ================= Round summary dialog ================= -->
+<dialog id="roundDlg" aria-labelledby="roundTitle">
+  <div class="dlg" id="roundBody"></div>
+</dialog>
+
+<div class="celebrate" id="celebrate" hidden aria-hidden="true"></div>
+<div class="sr-only" id="announce" aria-live="assertive"></div>
+
+<script>
+/* =========================================================
+   RACK-O
+   Sections:
+     1. Utilities and settings storage
+     2. Game state
+     3. Rules helpers (scoring, order checks)
+     4. Computer strategies (easy, medium, hard) and hints
+     5. Round flow (deal, turns, end of round)
+     6. Human actions (deck, discard, slots)
+     7. Computer turns
+     8. Rendering
+     9. Animations (flying cards, celebration)
+    10. Dialogs and startup
+   ========================================================= */
+
+/* ---------- 1. Utilities and settings storage ---------- */
+const $ = (sel) => document.querySelector(sel);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const rand = (min, max) => Math.random() * (max - min) + min;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Settings are remembered in this browser only. Storage can fail, so every call is guarded.
+const store = {
+  get(key, fallback) {
+    try { const v = localStorage.getItem('racko:' + key); return v == null ? fallback : JSON.parse(v); }
+    catch (e) { return fallback; }
+  },
+  set(key, value) { try { localStorage.setItem('racko:' + key, JSON.stringify(value)); } catch (e) {} }
+};
+
+/* ---------- 2. Game state ---------- */
+const RACK = 10;                         // slots per rack
+const NAMES = ['Otto', 'Mabel', 'Ruth']; // computer players
+
+const S = {
+  players: [],      // [{ name, human, rack: [10 numbers], score }]
+  deck: [],         // face-down draw pile (top = last item)
+  discard: [],      // face-up pile (top = last item)
+  max: 40,          // highest card in this game's deck
+  current: 0,       // whose turn it is (index into players)
+  starter: -1,      // who started the current round
+  phase: 'idle',    // idle | choose | holding | ai | roundOver
+  held: null,       // card the human is holding
+  heldFrom: null,   // 'deck' or 'discard'
+  difficulty: 'medium',
+  target: 500,
+  round: 0,
+  revealed: false,  // show computer racks (end of round)
+  anim: false,      // true while a human-triggered animation runs
+  token: 0,         // changes when a round starts, cancels stale computer turns
+  log: [],
+  hintSlot: -1,
+  hintPile: null
+};
+
+const els = {
+  scores: $('#scores'), opps: $('#opps'), status: $('#status'),
+  deck: $('#deck'), discard: $('#discard'), held: $('#held'),
+  deckCount: $('#deckCount'), discardLabel: $('#discardLabel'),
+  rack: $('#rack'), progress: $('#progress'), log: $('#log'),
+  hintBtn: $('#hintBtn'), celebrate: $('#celebrate'), announce: $('#announce')
+};
+
+/* ---------- 3. Rules helpers ---------- */
+const deckSizeFor = (n) => (n === 2 ? 40 : n === 3 ? 50 : 60);
+const topDiscard = () => (S.discard.length ? S.discard[S.discard.length - 1] : null);
+const pos = (v) => (v - 1) / (S.max - 1);                 // 0..1 position along a slot
+const hue = (v) => Math.round(205 - pos(v) * 195);        // blue (low) to red (high)
+const idealSlot = (v) => pos(v) * (RACK - 1);             // where a card "belongs" (0..9)
+
+// Number of cards in order, counting from slot 1 until the order breaks.
+function inOrderCount(r) {
+  let k = 1;
+  while (k < r.length && r[k] > r[k - 1]) k++;
+  return k;
+}
+const isRackO = (r) => inOrderCount(r) === r.length;
+
+
+// If the deck is empty, shuffle the discard pile (except its top card) into a new deck.
+function ensureDeck() {
+  if (S.deck.length > 0) return;
+  const top = S.discard.pop();
+  S.deck = shuffle(S.discard);
+  S.discard = top == null ? [] : [top];
+  addLog('The deck ran out, so the discard pile was shuffled into a new deck.');
+}
+
+/* ---------- 4. Computer strategies and hints ---------- */
+
+// How bad is value v in slot i, looking at its neighbors? (used by Easy and Medium)
+function localBadness(r, i, v) {
+  let b = Math.abs(idealSlot(v) - i);
+  if (i > 0 && r[i - 1] >= v) b += 2;
+  if (i < r.length - 1 && r[i + 1] <= v) b += 2;
+  return b;
+}
+
+
+// Hard's "keepers": the longest increasing run of cards that each sit within
+// about one slot of where their number belongs.
+function anchorSlots(r) {
+  const len = Array(RACK).fill(0), prev = Array(RACK).fill(-1);
+  for (let i = 0; i < RACK; i++) {
+    if (Math.abs(idealSlot(r[i]) - i) > 1.25) continue;
+    len[i] = 1;
+    for (let j = 0; j < i; j++) {
+      // r[i] - r[j] >= i - j leaves room for the cards in between
+      if (len[j] && r[j] < r[i] && r[i] - r[j] >= i - j && len[j] + 1 > len[i]) { len[i] = len[j] + 1; prev[i] = j; }
+    }
+  }
+  let end = -1;
+  for (let i = 0; i < RACK; i++) if (len[i] && (end < 0 || len[i] >= len[end])) end = i;
+  const out = [];
+  for (let k = end; k >= 0; k = prev[k]) out.unshift(k);
+  return out;
+}
+
+// Slot that would finish Rack-O with this card, or -1.
+function winningSlot(r, v) {
+  for (let i = 0; i < r.length; i++) {
+    const copy = r.slice(); copy[i] = v;
+    if (isRackO(copy)) return i;
+  }
+  return -1;
+}
+
+const strategies = {
+  // Easy: roughly the right area, sometimes a random slot.
+  easy(r, v) {
+    const slot = Math.random() < 0.3
+      ? Math.floor(Math.random() * RACK)
+      : clamp(Math.round(idealSlot(v) + rand(-1.5, 1.5)), 0, RACK - 1);
+    return { slot, gain: localBadness(r, slot, r[slot]) - localBadness(r, slot, v) };
+  },
+  // Medium: card value proportional to slot, checking the slot on each side too.
+  medium(r, v) {
+    const s = clamp(Math.round(idealSlot(v)), 0, RACK - 1);
+    let slot = s, gain = -Infinity;
+    for (const i of [s - 1, s, s + 1]) {
+      if (i < 0 || i >= RACK) continue;
+      const g = localBadness(r, i, r[i]) - localBadness(r, i, v);
+      if (g > gain) { gain = g; slot = i; }
+    }
+    return { slot, gain };
+  },
+  // Hard: keeps the cards that are already in order and close to where they belong
+  // ("anchors"), and only fills the gaps between them. Inside a gap, it spreads the
+  // missing values evenly, so a card goes where its number fits between the anchors.
+  hard(r, v) {
+    const anchors = anchorSlots(r);
+    const isAnchor = new Set(anchors);
+    let slot = -1, gain = -Infinity;
+    for (let i = 0; i < RACK; i++) {
+      if (isAnchor.has(i)) continue;                 // never break a good run
+      let ia = -1, va = 0, ib = RACK, vb = S.max + 1; // nearest anchors on each side
+      for (const a of anchors) {
+        if (a < i) { ia = a; va = r[a]; } else if (a > i && ib === RACK) { ib = a; vb = r[a]; }
+      }
+      if (v <= va || v >= vb) continue;              // the card doesn't fit in this gap
+      // how far a value is from where it would sit if the gap were spread evenly
+      const miss = (x) => (x > va && x < vb) ? Math.abs(ia + ((x - va) / (vb - va)) * (ib - ia) - i) : 2.5;
+      const g = miss(r[i]) - miss(v);
+      if (g > gain) { gain = g; slot = i; }
+    }
+    return slot < 0 ? { slot: strategies.medium(r, v).slot, gain: -99 } : { slot, gain };
+  }
+};
+
+// Thresholds: how much better a discard-pile card must be to take it, and a drawn card to keep it.
+const THRESH = { easy: { take: 0.5, keep: 0 }, medium: { take: 1.5, keep: 0.2 }, hard: { take: 1, keep: 1.2 } };
+
+// Returns the slot to use for the discard-pile card, or -1 to draw from the deck instead.
+function aiPlanDiscard(r, v, diff) {
+  if (v == null) return -1;
+  const win = winningSlot(r, v);
+  if (win >= 0 && (diff !== 'easy' || Math.random() < 0.8)) return win;
+  const plan = strategies[diff](r, v);
+  if (diff === 'easy' && Math.random() < 0.3) return -1;
+  return plan.gain >= THRESH[diff].take ? plan.slot : -1;
+}
+
+// Returns the slot for a card drawn from the deck, or -1 to discard it.
+function aiPlanDrawn(r, v, diff) {
+  const win = winningSlot(r, v);
+  if (win >= 0 && (diff !== 'easy' || Math.random() < 0.8)) return win;
+  const plan = strategies[diff](r, v);
+  if (diff === 'easy' && Math.random() < 0.15) return plan.slot; // the occasional odd choice
+  return plan.gain > THRESH[diff].keep ? plan.slot : -1;
+}
+
+/* ---------- 5. Round flow ---------- */
+function newGame({ opponents, difficulty, target }) {
+  S.players = [{ name: 'You', human: true, rack: [], score: 0 }];
+  for (let i = 0; i < opponents; i++) S.players.push({ name: NAMES[i], human: false, rack: [], score: 0 });
+  S.max = deckSizeFor(S.players.length);
+  S.difficulty = difficulty;
+  S.target = target;
+  S.round = 0;
+  S.starter = -1;
+  S.log = [];
+  $('#scaleMax').textContent = `${S.max}, high`;
+  $('#helpMax').textContent = S.max;
+  $('#helpTarget').textContent = S.target;
+  startRound();
+}
+
+function startRound() {
+  S.token++;
+  S.round++;
+  S.starter = (S.starter + 1) % S.players.length;
+  S.deck = shuffle(Array.from({ length: S.max }, (_, i) => i + 1));
+  S.players.forEach((p) => (p.rack = []));
+
+  // Deal one card at a time, filling slot 1 for everyone, then slot 2, and so on.
+  for (let slot = 0; slot < RACK; slot++) {
+    for (let k = 0; k < S.players.length; k++) {
+      S.players[(S.starter + k) % S.players.length].rack[slot] = S.deck.pop();
+    }
+  }
+  S.discard = [S.deck.pop()];
+  S.held = null; S.heldFrom = null; S.revealed = false; S.anim = false;
+  S.current = S.starter;
+  addLog(`Round ${S.round}: the cards are dealt.`);
+  renderAll(true);
+  startTurn();
+}
+
+function startTurn() {
+  const p = S.players[S.current];
+  clearHint();
+  if (isRackO(p.rack)) { endRound(S.current); return; } // rare: dealt a perfect rack
+  if (p.human) {
+    S.phase = 'choose';
+    setStatus(`Your turn. Draw from the deck or take the ${topDiscard()} from the discard pile.`);
+  } else {
+    S.phase = 'ai';
+    setStatus(`${p.name}’s turn…`);
+  }
+  renderAll();
+  if (!p.human) runComputerTurn(S.current, S.token);
+}
+
+function nextTurn() {
+  if (isRackO(S.players[S.current].rack)) { endRound(S.current); return; }
+  S.current = (S.current + 1) % S.players.length;
+  startTurn();
+}
+
+async function endRound(winnerIdx) {
+  S.phase = 'roundOver';
+  S.revealed = true;
+  clearHint();
+  const winner = S.players[winnerIdx];
+  addLog(winner.human ? 'You called Rack-O!' : `${winner.name} called Rack-O!`);
+  setStatus(winner.human ? 'Rack-O! You lined them all up.' : `${winner.name} called Rack-O!`);
+
+  const rows = S.players.map((p, i) => {
+    const count = inOrderCount(p.rack);
+    const pts = i === winnerIdx ? 75 : count * 5;
+    p.score += pts;
+    return { p, count, pts, win: i === winnerIdx };
+  });
+  renderAll();
+  await celebrate(winner);
+  showRoundSummary(rows, winner);
+}
+
+/* ---------- 6. Human actions ---------- */
+async function onDeckClick() {
+  if (S.phase !== 'choose' || S.anim) return;
+  ensureDeck();
+  S.anim = true;
+  const v = S.deck.pop();
+  clearHint();
+  renderPiles();
+  await fly({ from: els.deck, to: els.held, value: v });
+  S.held = v; S.heldFrom = 'deck'; S.phase = 'holding'; S.anim = false;
+  setStatus(`You drew a ${v}. Tap a slot to swap it in, or tap the discard pile to throw it away.`);
+  renderAll();
+}
+
+async function onDiscardClick() {
+  if (S.anim) return;
+  if (S.phase === 'choose' && S.discard.length) {
+    S.anim = true;
+    const v = S.discard.pop();
+    clearHint();
+    renderPiles();
+    await fly({ from: els.discard, to: els.held, value: v });
+    S.held = v; S.heldFrom = 'discard'; S.phase = 'holding'; S.anim = false;
+    setStatus(`You took the ${v}. Tap the slot you want to put it in.`);
+    renderAll();
+  } else if (S.phase === 'holding' && S.heldFrom === 'deck') {
+    S.anim = true;
+    const v = S.held;
+    S.held = null;
+    clearHint();
+    renderPiles();
+    await fly({ from: els.held, to: els.discard, value: v });
+    S.discard.push(v);
+    S.anim = false;
+    S.phase = 'idle';
+    addLog(`You discarded the ${v}.`);
+    renderAll();
+    nextTurn();
+  }
+}
+
+async function onSlotClick(i) {
+  if (S.phase !== 'holding' || S.anim) return;
+  const rack = S.players[0].rack;
+  const v = S.held, old = rack[i];
+  S.anim = true;
+  S.held = null;
+  clearHint();
+  renderPiles();
+
+  const slotEl = els.rack.children[i];
+  const bar = slotEl.querySelector('.bar.real');
+  const track = slotEl.querySelector('.track');
+  const oldRect = bar.getBoundingClientRect();
+  const tr = track.getBoundingClientRect();
+  // Where the new card will sit inside the slot
+  const newRect = new DOMRect(tr.left + pos(v) * (tr.width - oldRect.width), oldRect.top, oldRect.width, oldRect.height);
+  bar.style.visibility = 'hidden';
+  const ghost = slotEl.querySelector('.bar.ghost'); if (ghost) ghost.remove();
+
+  await Promise.all([
+    fly({ from: oldRect, to: els.discard, value: old }),
+    fly({ from: els.held, to: newRect, value: v, delay: 90 })
+  ]);
+  rack[i] = v;
+  S.discard.push(old);
+  S.anim = false;
+  S.phase = 'idle';
+  addLog(`You put the ${v} in slot ${i + 1} and discarded the ${old}.`);
+  renderAll();
+  const placed = els.rack.children[i].querySelector('.bar.real');
+  if (placed && !reduceMotion) placed.classList.add('pop');
+  if (isRackO(rack)) { endRound(0); return; }
+  await sleep(250);
+  nextTurn();
+}
+
+function showHint() {
+  const me = S.players[0];
+  if (!me || S.players[S.current] !== me) return;
+  const r = me.rack;
+  if (S.phase === 'choose') {
+    const t = topDiscard();
+    const win = t == null ? -1 : winningSlot(r, t);
+    const plan = t == null ? { gain: -99 } : strategies.hard(r, t);
+    if (win >= 0 || plan.gain >= THRESH.hard.take) {
+      S.hintPile = 'discard'; S.hintSlot = win >= 0 ? win : plan.slot;
+      setStatus(`Hint: take the ${t} and put it in slot ${S.hintSlot + 1}.`);
+    } else {
+      S.hintPile = 'deck'; S.hintSlot = -1;
+      setStatus(`Hint: draw from the deck. The ${t} wouldn’t improve your rack much.`);
+    }
+  } else if (S.phase === 'holding') {
+    const win = winningSlot(r, S.held);
+    const plan = strategies.hard(r, S.held);
+    if (S.heldFrom === 'deck' && win < 0 && plan.gain <= 0) {
+      S.hintPile = 'discard'; S.hintSlot = -1;
+      setStatus(`Hint: discard the ${S.held}. It wouldn’t help any slot.`);
+    } else {
+      S.hintPile = null; S.hintSlot = win >= 0 ? win : plan.slot;
+      setStatus(`Hint: put the ${S.held} in slot ${S.hintSlot + 1}.`);
+    }
+  }
+  renderAll();
+}
+function clearHint() { S.hintSlot = -1; S.hintPile = null; }
+
+/* ---------- 7. Computer turns ---------- */
+async function runComputerTurn(idx, token) {
+  const p = S.players[idx];
+  const stale = () => token !== S.token || S.phase !== 'ai';
+  const row = (slot) => els.opps.querySelector(`[data-p="${idx}"] .mini-row:nth-child(${slot + 1})`);
+  const miniRack = () => els.opps.querySelector(`[data-p="${idx}"] .mini`);
+
+  await sleep(reduceMotion ? 300 : 800);
+  if (stale()) return;
+
+  const t = topDiscard();
+  const takeSlot = aiPlanDiscard(p.rack, t, S.difficulty);
+  let msg;
+
+  if (takeSlot >= 0) {
+    // Take the face-up card from the discard pile
+    S.discard.pop(); renderPiles();
+    await fly({ from: els.discard, to: row(takeSlot), value: t });
+    if (stale()) return;
+    const old = p.rack[takeSlot];
+    p.rack[takeSlot] = t;
+    await fly({ from: row(takeSlot), to: els.discard, value: old });
+    if (stale()) return;
+    S.discard.push(old);
+    msg = `${p.name} took the ${t} from the discard pile and put it in slot ${takeSlot + 1}, discarding the ${old}.`;
+  } else {
+    // Draw a hidden card from the deck
+    ensureDeck();
+    const v = S.deck.pop(); renderPiles();
+    await fly({ from: els.deck, to: miniRack(), value: v, back: true });
+    if (stale()) return;
+    await sleep(reduceMotion ? 100 : 350);
+    const slot = aiPlanDrawn(p.rack, v, S.difficulty);
+    if (slot >= 0) {
+      const old = p.rack[slot];
+      p.rack[slot] = v;
+      await fly({ from: row(slot), to: els.discard, value: old });
+      if (stale()) return;
+      S.discard.push(old);
+      msg = `${p.name} drew from the deck, put it in slot ${slot + 1}, and discarded the ${old}.`;
+    } else {
+      await fly({ from: miniRack(), to: els.discard, value: v });
+      if (stale()) return;
+      S.discard.push(v);
+      msg = `${p.name} drew a ${v} from the deck and discarded it.`;
+    }
+  }
+  addLog(msg);
+  setStatus(msg);
+  renderAll();
+  await sleep(reduceMotion ? 300 : 700);
+  if (stale()) return;
+  nextTurn();
+}
+
+/* ---------- 8. Rendering ---------- */
+function cardHTML(v) { return `<div class="pcard face" style="--h:${hue(v)}"><span>${v}</span></div>`; }
+
+function setStatus(text) { els.status.textContent = text; }
+
+function addLog(text) {
+  S.log.unshift(text);
+  S.log = S.log.slice(0, 6);
+  renderLog();
+}
+
+function renderAll(deal = false) {
+  renderScores(); renderOpponents(); renderPiles(); renderRack(deal); renderLog();
+  const myTurn = S.players[S.current] && S.players[S.current].human;
+  els.hintBtn.disabled = !(myTurn && (S.phase === 'choose' || S.phase === 'holding'));
+}
+
+function renderScores() {
+  const chips = S.players.map((p, i) => {
+    const turn = i === S.current && S.phase !== 'roundOver' && S.phase !== 'idle';
+    return `<span class="chip ${turn ? 'turn' : ''}"><b>${p.name}</b><span class="pts">${p.score}</span></span>`;
+  }).join('');
+  els.scores.innerHTML = chips + (S.players.length ? `<span class="goal-chip">Round ${S.round}, first to ${S.target}</span>` : '');
+}
+
+function renderOpponents() {
+  els.opps.innerHTML = S.players.slice(1).map((p, k) => {
+    const i = k + 1;
+    const turn = i === S.current && S.phase === 'ai';
+    const rows = p.rack.map((v) => S.revealed
+      ? `<div class="mini-row"><div class="mini-card face" style="--pos:${pos(v)};--h:${hue(v)}">${v}</div></div>`
+      : `<div class="mini-row"><div class="mini-card back"></div></div>`).join('');
+    const note = S.revealed ? `<div class="opp-note">${inOrderCount(p.rack)} in order</div>` : '';
+    return `<div class="opp ${turn ? 'turn' : ''} ${S.revealed ? 'revealed' : ''}" data-p="${i}">
+      <div class="opp-head"><span>${p.name}</span><span class="pts">${p.score}</span></div>
+      <div class="mini" aria-label="${p.name}’s rack">${rows}</div>${note}</div>`;
+  }).join('');
+}
+
+function renderPiles() {
+  const t = topDiscard();
+  els.deck.innerHTML = S.deck.length ? '<div class="pcard back"></div>' : '<div class="pcard empty">Empty</div>';
+  els.deckCount.textContent = `Deck (${S.deck.length})`;
+  els.discard.innerHTML = t != null ? cardHTML(t) : '<div class="pcard empty">Empty</div>';
+  els.held.innerHTML = S.held != null ? cardHTML(S.held) : '<div class="pcard empty"></div>';
+
+  const canDeck = S.phase === 'choose';
+  const throwAway = S.phase === 'holding' && S.heldFrom === 'deck';
+  const canDiscard = (S.phase === 'choose' && t != null) || throwAway;
+  els.deck.disabled = !canDeck;
+  els.discard.disabled = !canDiscard;
+  els.deck.classList.toggle('can', canDeck && !S.anim);
+  els.discard.classList.toggle('can', canDiscard && !S.anim);
+  els.deck.classList.toggle('hinted', S.hintPile === 'deck');
+  els.discard.classList.toggle('hinted', S.hintPile === 'discard');
+  els.discardLabel.textContent = throwAway ? 'Throw it here' : 'Discard';
+  els.discard.setAttribute('aria-label', throwAway ? `Discard the ${S.held}` : t != null ? `Take the ${t} from the discard pile` : 'Discard pile is empty');
+}
+
+function renderRack(deal = false) {
+  const me = S.players[0];
+  if (!me) { els.rack.innerHTML = ''; return; }
+  const r = me.rack;
+  const holding = S.phase === 'holding' && S.held != null;
+  const count = inOrderCount(r);
+  els.rack.classList.toggle('holding', holding);
+  els.rack.classList.toggle('deal', deal && !reduceMotion);
+  els.rack.innerHTML = r.map((v, i) => `
+    <li><button class="slot ${i < count ? 'inorder' : ''} ${S.hintSlot === i ? 'hinted' : ''}" data-i="${i}" ${holding ? '' : 'disabled'}
+      aria-label="Slot ${i + 1}, ${v}${i < count ? ', in order' : ''}${holding ? `. Swap in the ${S.held}` : ''}">
+      <span class="slotnum">${i + 1}</span>
+      <span class="track">
+        <span class="tick" style="--pos:${i / (RACK - 1)}"></span>
+        ${holding ? `<span class="bar ghost" style="--pos:${pos(S.held)};--h:${hue(S.held)}">${S.held}</span>` : ''}
+        <span class="bar real" style="--pos:${pos(v)};--h:${hue(v)};animation-delay:${i * 45}ms">${v}</span>
+      </span>
+    </button></li>`).join('');
+  els.progress.classList.toggle('good', count >= 5);
+  els.progress.textContent = isRackO(r) ? 'All 10 in order!' : `${count} in order, worth ${count * 5} points`;
+}
+
+function renderLog() { els.log.innerHTML = S.log.map((t) => `<li>${t}</li>`).join(''); }
+
+/* ---------- 9. Animations ---------- */
+const rectOf = (x) => (x instanceof Element ? x.getBoundingClientRect() : x);
+
+// Fly a card from one place to another. `from` and `to` may be elements or DOMRects.
+function fly({ from, to, value, back = false, delay = 0, duration = 480 }) {
+  if (!from || !to) return Promise.resolve();
+  const a = rectOf(from), b = rectOf(to);
+  const el = document.createElement('div');
+  el.className = 'flyer pcard ' + (back ? 'back' : 'face');
+  if (!back) { el.style.setProperty('--h', hue(value)); el.innerHTML = `<span>${value}</span>`; }
+  el.style.fontSize = Math.max(11, Math.min(a.height * 0.42, a.width * 0.42, 34)) + 'px';
+  Object.assign(el.style, { left: a.left + 'px', top: a.top + 'px', width: a.width + 'px', height: a.height + 'px' });
+  document.body.appendChild(el);
+  const anim = el.animate([
+    { left: a.left + 'px', top: a.top + 'px', width: a.width + 'px', height: a.height + 'px', transform: 'rotate(0deg) scale(1)' },
+    { offset: 0.5, transform: 'rotate(-7deg) scale(1.1)' },
+    { left: b.left + 'px', top: b.top + 'px', width: b.width + 'px', height: b.height + 'px', transform: 'rotate(0deg) scale(1)' }
+  ], { duration: reduceMotion ? 1 : duration, delay: reduceMotion ? 0 : delay, easing: 'cubic-bezier(.3,.7,.2,1)', fill: 'forwards' });
+  return anim.finished.then(() => el.remove(), () => el.remove());
+}
+
+// Big "Rack-O!" moment with falling cards.
+function celebrate(winner) {
+  return new Promise((resolve) => {
+    const ov = els.celebrate;
+    ov.innerHTML = '';
+    ov.hidden = false;
+    els.announce.textContent = winner.human ? 'Rack-O! You called it.' : `Rack-O! ${winner.name} called it.`;
+
+    const burst = document.createElement('div'); burst.className = 'burst';
+    const stamp = document.createElement('div'); stamp.className = 'stamp';
+    stamp.innerHTML = `Rack-O!<small>${winner.human ? 'You called it' : winner.name + ' called it'}</small>`;
+    ov.append(burst, stamp);
+
+    if (!reduceMotion) {
+      burst.animate([{ transform: 'scale(.2) rotate(0deg)', opacity: 0 }, { transform: 'scale(1) rotate(60deg)', opacity: 1 }],
+        { duration: 2600, easing: 'ease-out', fill: 'forwards' });
+      stamp.animate([
+        { transform: 'rotate(-8deg) scale(3)', opacity: 0 },
+        { transform: 'rotate(-8deg) scale(.92)', opacity: 1, offset: 0.6 },
+        { transform: 'rotate(-8deg) scale(1)', opacity: 1 }
+      ], { duration: 700, easing: 'cubic-bezier(.2,.9,.3,1.3)' });
+      for (let i = 0; i < 70; i++) {
+        const v = 1 + Math.floor(Math.random() * S.max);
+        const c = document.createElement('div');
+        c.className = 'confetti';
+        c.style.setProperty('--h', hue(v));
+        c.style.left = Math.random() * 100 + 'vw';
+        c.textContent = v;
+        ov.appendChild(c);
+        c.animate([
+          { transform: 'translate(0,-12vh) rotate(0deg)' },
+          { transform: `translate(${rand(-140, 140)}px,112vh) rotate(${rand(-600, 600)}deg)` }
+        ], { duration: rand(1800, 3000), delay: rand(0, 700), easing: 'cubic-bezier(.3,.1,.6,1)', fill: 'both' });
+      }
+    }
+    setTimeout(() => { ov.hidden = true; ov.innerHTML = ''; resolve(); }, reduceMotion ? 1500 : 2800);
+  });
+}
+
+/* ---------- 10. Dialogs and startup ---------- */
+const setupDlg = $('#setupDlg'), helpDlg = $('#helpDlg'), roundDlg = $('#roundDlg');
+
+function radio(name, value) {
+  const el = document.querySelector(`input[name="${name}"][value="${value}"]`);
+  if (el) el.checked = true;
+}
+function radioValue(name) {
+  const el = document.querySelector(`input[name="${name}"]:checked`);
+  return el ? el.value : null;
+}
+function updateDeckNote() {
+  const n = Number(radioValue('opp') || 1) + 1;
+  $('#deckNote').textContent = `${n} players use cards 1 to ${deckSizeFor(n)}.`;
+}
+
+function openSetup() {
+  radio('opp', store.get('opp', 1));
+  radio('diff', store.get('diff', 'medium'));
+  radio('target', store.get('target', 500));
+  updateDeckNote();
+  $('#setupCancel').hidden = S.round === 0;
+  setupDlg.showModal();
+}
+
+function showRoundSummary(rows, winner) {
+  const top = Math.max(...S.players.map((p) => p.score));
+  const over = top >= S.target;
+  const leaders = S.players.filter((p) => p.score === top);
+  let headline;
+  if (over) {
+    if (leaders.length > 1) headline = `It’s a tie at ${top} points between ${leaders.map((p) => p.name).join(' and ')}.`;
+    else headline = leaders[0].human ? `You win with ${top} points!` : `${leaders[0].name} wins with ${top} points.`;
+  }
+  const body = rows.map(({ p, count, pts, win }) => `
+    <tr class="${win ? 'win' : ''}">
+      <td><b>${p.name}</b>
+        <div class="seq">${p.rack.map((v, i) => `<i class="${i < count ? 'ok' : ''}">${v}</i>`).join('')}</div></td>
+      <td class="n">${win ? 'Rack-O' : count}</td>
+      <td class="n">+${pts}</td>
+      <td class="n"><b>${p.score}</b></td>
+    </tr>`).join('');
+
+  $('#roundBody').innerHTML = `
+    <h2 id="roundTitle">${over ? 'Game over' : `Round ${S.round} results`}</h2>
+    <p class="lede">${winner.human ? 'You called Rack-O!' : `${winner.name} called Rack-O.`} ${over ? headline : `First to ${S.target} wins.`}</p>
+    <div class="summary"><table>
+      <thead><tr><th>Player</th><th class="n">In order</th><th class="n">Round</th><th class="n">Total</th></tr></thead>
+      <tbody>${body}</tbody></table></div>
+    <div class="dlg-actions" style="margin-top:16px">
+      ${over ? '<button class="btn" id="roundClose">Look at the table</button><button class="btn primary" id="playAgain">Play again</button>'
+             : '<button class="btn primary" id="nextRound">Deal next round</button>'}
+    </div>`;
+  roundDlg.showModal();
+
+  if (over) {
+    $('#roundClose').onclick = () => { roundDlg.close(); setStatus(`${headline} Start a new game whenever you’re ready.`); };
+    $('#playAgain').onclick = () => { roundDlg.close(); openSetup(); };
+  } else {
+    $('#nextRound').onclick = () => { roundDlg.close(); startRound(); };
+  }
+}
+
+// --- Event wiring ---
+els.deck.addEventListener('click', onDeckClick);
+els.discard.addEventListener('click', onDiscardClick);
+els.rack.addEventListener('click', (e) => {
+  const btn = e.target.closest('.slot');
+  if (btn) onSlotClick(Number(btn.dataset.i));
+});
+els.hintBtn.addEventListener('click', showHint);
+$('#helpBtn').addEventListener('click', () => helpDlg.showModal());
+$('#helpClose').addEventListener('click', () => helpDlg.close());
+$('#newBtn').addEventListener('click', openSetup);
+document.querySelectorAll('input[name="opp"]').forEach((el) => el.addEventListener('change', updateDeckNote));
+$('#setupCancel').addEventListener('click', () => setupDlg.close());
+$('#setupStart').addEventListener('click', () => {
+  const settings = {
+    opponents: Number(radioValue('opp') || 1),
+    difficulty: radioValue('diff') || 'medium',
+    target: Number(radioValue('target') || 500)
+  };
+  store.set('opp', settings.opponents);
+  store.set('diff', settings.difficulty);
+  store.set('target', settings.target);
+  setupDlg.close();
+  newGame(settings);
+});
+// The first setup and the round summary need a choice, so Escape doesn't dismiss them.
+setupDlg.addEventListener('cancel', (e) => { if (S.round === 0) e.preventDefault(); });
+roundDlg.addEventListener('cancel', (e) => e.preventDefault());
+
+// --- Installable app ---
+// Offline support: the service worker caches the game the first time it loads.
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+// Android and desktop Chrome/Edge offer an install prompt we can trigger from a button.
+let installPrompt = null;
+const installBtn = $('#installBtn');
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; installBtn.hidden = false; });
+installBtn.addEventListener('click', async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice;
+  installPrompt = null;
+  installBtn.hidden = true;
+});
+window.addEventListener('appinstalled', () => { installBtn.hidden = true; });
+// iPhone and iPad install from Safari's Share menu, so show a tip in How to play instead.
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isInstalled = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+if (isIOS && !isInstalled) $('#iosTip').hidden = false;
+
+// --- Start ---
+renderAll();
+openSetup();
+</script>
+</body>
+</html>
