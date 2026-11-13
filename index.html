@@ -276,6 +276,38 @@ legend{font-weight:800;margin-bottom:7px;padding:0}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
 }
+/* ---------- Multiplayer ---------- */
+input[type="text"]{font:inherit;font-weight:600;padding:.5em .75em;border:2px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);min-width:0}
+input[type="text"]:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+input[type="text"]:disabled{opacity:.6}
+.field{display:grid;gap:6px;margin-bottom:14px;font-weight:800}
+.seat-list{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}
+.seat-list li{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seat-list .seat-name{flex:1 1 9em}
+.seat-list .num{font-family:var(--display);color:var(--muted);text-align:center;width:1.4em}
+.seat-kind{display:flex;border:2px solid var(--line);border-radius:999px;overflow:hidden}
+.seat-kind button{border:none;background:none;padding:.38em .75em;font-weight:700;font-size:.85rem;cursor:pointer;color:var(--muted)}
+.seat-kind button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.seat-remove{border:none;background:none;color:var(--muted);font-weight:700;cursor:pointer;padding:.3em .4em;text-decoration:underline}
+.seat-remove:disabled{visibility:hidden}
+.online-choice{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px}
+.online-choice > div{display:grid;gap:8px;align-content:start;padding:12px;border:2px solid var(--line);border-radius:14px}
+.join-row{display:flex;gap:6px}
+.join-row input{width:5.5em;text-transform:uppercase;letter-spacing:.12em;font-family:var(--display);font-weight:400}
+@media (max-width:480px){.online-choice{grid-template-columns:1fr}}
+.form-msg{min-height:1.3em;margin:6px 0 10px;font-weight:600;color:var(--muted)}
+.form-msg.err{color:hsl(8 70% 48%)}
+.room-code{margin:0 0 4px;font-weight:700;color:var(--muted)}
+.room-code b{display:block;font-family:var(--display);font-weight:400;font-size:2.6rem;letter-spacing:.14em;color:var(--ink);line-height:1.1}
+.lobby-list{list-style:none;margin:10px 0 14px;padding:0;display:grid;gap:6px}
+.lobby-list li{display:flex;justify-content:space-between;gap:8px;padding:.5em .8em;border-radius:10px;background:color-mix(in srgb,var(--ink) 6%,transparent);font-weight:700}
+.lobby-list li span{color:var(--muted);font-weight:600}
+.opp-tag{font-size:.74rem;color:var(--muted);font-weight:600}
+.opp.offline{opacity:.6}
+.rack.hidden-rack .track{background:repeating-linear-gradient(135deg,var(--groove) 0 10px,color-mix(in srgb,var(--groove) 80%,#000) 10px 20px)}
+.pass-dlg{text-align:center}
+.pass-dlg h2{font-size:2rem}
+.pass-dlg .dlg-actions{justify-content:center}
 </style>
 </head>
 <body>
@@ -295,7 +327,7 @@ legend{font-weight:800;margin-bottom:7px;padding:0}
 
   <!-- ================= Table ================= -->
   <main class="table">
-    <section id="opponents" aria-label="Computer players"><div class="opps" id="opps"></div></section>
+    <section id="opponents" aria-label="Other players"><div class="opps" id="opps"></div></section>
 
     <section class="piles panel" aria-label="Deck and discard pile">
       <p class="status" id="status" aria-live="polite">Choose your game settings to start.</p>
@@ -320,11 +352,15 @@ legend{font-weight:800;margin-bottom:7px;padding:0}
           <button class="btn" id="keepBtn">Keep building</button>
         </div>
       </div>
+      <div class="call-bar" id="seatBar" hidden>
+        <p id="seatText"></p>
+        <div class="row"><button class="btn" id="takeoverBtn">Let the computer play</button></div>
+      </div>
     </section>
 
     <section class="player panel" aria-label="Your rack">
       <div class="rack-head">
-        <h2>Your rack</h2>
+        <h2 id="rackTitle">Your rack</h2>
         <span class="progress" id="progress"></span>
         <span class="run-note" id="runNote" hidden></span>
       </div>
@@ -345,41 +381,105 @@ legend{font-weight:800;margin-bottom:7px;padding:0}
     <h2 id="setupTitle">New game</h2>
     <p class="lede">Line up all 10 cards from low to high before anyone else does.</p>
     <fieldset>
-      <legend>Computer opponents</legend>
+      <legend>Who’s playing?</legend>
       <div class="seg">
-        <label><input type="radio" name="opp" value="1"><span>1</span></label>
-        <label><input type="radio" name="opp" value="2"><span>2</span></label>
-        <label><input type="radio" name="opp" value="3"><span>3</span></label>
+        <label><input type="radio" name="mode" value="solo"><span>Against the computer</span></label>
+        <label><input type="radio" name="mode" value="pass"><span>Pass and play</span></label>
+        <label><input type="radio" name="mode" value="online"><span>Online</span></label>
       </div>
+    </fieldset>
+
+    <!-- Against the computer -->
+    <div id="soloOpts">
+      <fieldset>
+        <legend>Computer opponents</legend>
+        <div class="seg">
+          <label><input type="radio" name="opp" value="1"><span>1</span></label>
+          <label><input type="radio" name="opp" value="2"><span>2</span></label>
+          <label><input type="radio" name="opp" value="3"><span>3</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <!-- Pass and play -->
+    <div id="passOpts" hidden>
+      <fieldset>
+        <legend>Players</legend>
+        <ol class="seat-list" id="seatList"></ol>
+        <button class="btn" id="addSeat">Add a player</button>
+        <div class="seg-note">Everyone shares this device. Before each person’s turn, the screen asks you to pass it along so nobody sees anyone else’s rack.</div>
+      </fieldset>
+    </div>
+
+    <!-- Online -->
+    <div id="onlineOpts" hidden>
+      <p class="seg-note" id="onlineOff" hidden></p>
+      <div id="onlineStart">
+        <label class="field"><span>Your name</span><input type="text" id="onlineName" maxlength="14" autocomplete="nickname" placeholder="First name or nickname"></label>
+        <div class="online-choice">
+          <div>
+            <b>Start a new game</b>
+            <button class="btn primary" id="createRoom">Create a room</button>
+          </div>
+          <div>
+            <b>Join a friend’s game</b>
+            <div class="join-row">
+              <input type="text" id="joinCode" maxlength="4" placeholder="Code" autocapitalize="characters" autocomplete="off" aria-label="Room code">
+              <button class="btn" id="joinRoom">Join</button>
+            </div>
+          </div>
+        </div>
+        <p class="form-msg" id="onlineMsg" aria-live="polite"></p>
+      </div>
+      <div id="lobby" hidden>
+        <p class="room-code">Room code <b id="roomCode"></b></p>
+        <p class="seg-note" id="lobbyNote"></p>
+        <ul class="lobby-list" id="lobbyList"></ul>
+        <fieldset id="lobbyCpu">
+          <legend>Computer players</legend>
+          <div class="seg" id="cpuSeg">
+            <label><input type="radio" name="cpus" value="0"><span>None</span></label>
+            <label><input type="radio" name="cpus" value="1"><span>1</span></label>
+            <label><input type="radio" name="cpus" value="2"><span>2</span></label>
+            <label><input type="radio" name="cpus" value="3"><span>3</span></label>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+
+    <!-- Shared settings -->
+    <div id="sharedOpts">
       <div class="seg-note" id="deckNote"></div>
-    </fieldset>
-    <fieldset>
-      <legend>Difficulty</legend>
-      <div class="seg">
-        <label><input type="radio" name="diff" value="easy"><span>Easy</span></label>
-        <label><input type="radio" name="diff" value="medium"><span>Medium</span></label>
-        <label><input type="radio" name="diff" value="hard"><span>Hard</span></label>
-      </div>
-    </fieldset>
-    <fieldset>
-      <legend>Play to</legend>
-      <div class="seg">
-        <label><input type="radio" name="target" value="200"><span>200</span></label>
-        <label><input type="radio" name="target" value="300"><span>300</span></label>
-        <label><input type="radio" name="target" value="500"><span>500</span></label>
-      </div>
-      <div class="seg-note">500 is the official score. Lower numbers make shorter games.</div>
-    </fieldset>
-    <fieldset>
-      <legend>Scoring</legend>
-      <div class="seg">
-        <label><input type="radio" name="rules" value="classic"><span>Classic</span></label>
-        <label><input type="radio" name="rules" value="bonus"><span>Bonus runs</span></label>
-      </div>
-      <div class="seg-note">With bonus runs, going Rack-O with consecutive numbers like 24, 25, 26 earns 50 to 400 extra points, and you can keep building before you call it.</div>
-    </fieldset>
+      <fieldset id="diffField">
+        <legend>Computer difficulty</legend>
+        <div class="seg">
+          <label><input type="radio" name="diff" value="easy"><span>Easy</span></label>
+          <label><input type="radio" name="diff" value="medium"><span>Medium</span></label>
+          <label><input type="radio" name="diff" value="hard"><span>Hard</span></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Play to</legend>
+        <div class="seg">
+          <label><input type="radio" name="target" value="200"><span>200</span></label>
+          <label><input type="radio" name="target" value="300"><span>300</span></label>
+          <label><input type="radio" name="target" value="500"><span>500</span></label>
+        </div>
+        <div class="seg-note">500 is the official score. Lower numbers make shorter games.</div>
+      </fieldset>
+      <fieldset>
+        <legend>Scoring</legend>
+        <div class="seg">
+          <label><input type="radio" name="rules" value="classic"><span>Classic</span></label>
+          <label><input type="radio" name="rules" value="bonus"><span>Bonus runs</span></label>
+        </div>
+        <div class="seg-note">With bonus runs, going Rack-O with consecutive numbers like 24, 25, 26 earns 50 to 400 extra points, and you can keep building before you call it.</div>
+      </fieldset>
+    </div>
     <div class="dlg-actions">
       <button class="btn" id="setupCancel">Keep playing</button>
+      <button class="btn" id="leaveRoom" hidden>Leave room</button>
+      <button class="btn primary" id="startOnline" hidden>Start the game</button>
       <button class="btn primary" id="setupStart">Deal the cards</button>
     </div>
   </div>
@@ -395,6 +495,7 @@ legend{font-weight:800;margin-bottom:7px;padding:0}
       <li><b>Swapping.</b> Tap a slot to put your card there. The card it replaces goes face up on the discard pile. You can never rearrange the cards in your rack.</li>
       <li><b>Scoring.</b> You get 5 points for each card in order, counting from slot 1 until the order breaks. Calling Rack-O is worth 75 points. The first player to reach <span id="helpTarget">500</span> wins.</li>
       <li><b>Bonus runs (optional).</b> A run is 3 or more consecutive numbers in a row, like 24, 25, 26. When bonus runs are on, the player who goes Rack-O adds a bonus for their longest run: 50 for 3 cards, 100 for 4, 200 for 5, and 400 for 6 or more. When your rack is in order, you choose whether to call Rack-O now or keep building a longer run, at the risk of someone else going out first. Cards in a run have a gold underline.</li>
+      <li><b>Playing with friends.</b> Choose Pass and play to share one device, or Online to play on separate devices. For online games, one person creates a room and the others join with its four-letter code.</li>
       <li><b>Tip.</b> Put each card where its number belongs. With <span id="helpMax">40</span> cards, a card in the middle of that range belongs near the middle of your rack. The faint dots in your rack mark those spots, and the green slots are the ones already in order.</li>
     </ol>
     <p class="install-tip" id="iosTip" hidden>To install Rack-O on your iPhone or iPad, tap the Share button in Safari, then choose “Add to Home Screen.” It will open full screen and work offline.</p>
@@ -407,9 +508,29 @@ legend{font-weight:800;margin-bottom:7px;padding:0}
   <div class="dlg" id="roundBody"></div>
 </dialog>
 
+<!-- ================= Pass the device ================= -->
+<dialog id="passDlg" aria-labelledby="passTitle">
+  <div class="dlg pass-dlg">
+    <h2 id="passTitle">Pass to Player</h2>
+    <p class="lede" id="passText"></p>
+    <div class="dlg-actions"><button class="btn primary" id="passReady">Show my rack</button></div>
+  </div>
+</dialog>
+
+<!-- ================= Notices ================= -->
+<dialog id="noticeDlg" aria-labelledby="noticeTitle">
+  <div class="dlg">
+    <h2 id="noticeTitle">Game ended</h2>
+    <p class="lede" id="noticeText"></p>
+    <div class="dlg-actions"><button class="btn primary" id="noticeOk">OK</button></div>
+  </div>
+</dialog>
+
 <div class="celebrate" id="celebrate" hidden aria-hidden="true"></div>
 <div class="sr-only" id="announce" aria-live="assertive"></div>
 
+<!-- Firebase settings for online play (see README.txt) -->
+<script src="firebase-config.js"></script>
 <script>
 /* Win music recordings, embedded as base64 MP3 so the game stays one file and works offline.
    roundWin: "Victory march", played when you call Rack-O.
@@ -423,18 +544,20 @@ window.RACKO_AUDIO = {
 /* =========================================================
    RACK-O
    Sections:
-     1. Utilities and settings storage
-     2. Game state
-     3. Rules helpers (scoring, order checks)
-     4. Computer strategies (easy, medium, hard) and hints
-     5. Round flow (deal, turns, end of round)
-     6. Human actions (deck, discard, slots)
+     1. Utilities, settings storage, sound effects and music
+     2. Game state and points of view (whose rack this screen shows)
+     3. Rules helpers (scoring, order checks, runs)
+     4. Computer strategies (easy, medium, hard)
+     5. Round flow and moves (run by the device hosting the game)
+     6. Human actions on this device, and hints
      7. Computer turns
-     8. Rendering
-     9. Animations (flying cards, celebration)
-    10. Dialogs and startup
+     8. Showing moves: animation and sound
+     9. Rendering
+    10. Card animations and the Rack-O celebration
+    11. Online play (Firebase)
+    12. Dialogs: setup, pass the device, round results
+    13. Event wiring and startup
    ========================================================= */
-
 /* ---------- 1. Utilities and settings storage ---------- */
 const $ = (sel) => document.querySelector(sel);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -607,34 +730,62 @@ const RACK = 10;                         // slots per rack
 const NAMES = ['Otto', 'Mabel', 'Ruth']; // computer players
 
 const S = {
-  players: [],      // [{ name, human, rack: [10 numbers], score }]
+  mode: 'solo',     // solo (vs computer) | pass (one shared device) | host / client (online)
+  players: [],      // [{ name, kind: 'local' | 'cpu' | 'remote', uid, rack, score, waited, online }]
   deck: [],         // face-down draw pile (top = last item)
   discard: [],      // face-up pile (top = last item)
   max: 40,          // highest card in this game's deck
-  current: 0,       // whose turn it is (index into players)
+  current: 0,       // whose turn it is
   starter: -1,      // who started the current round
-  phase: 'idle',    // idle | choose | holding | decide | ai | roundOver
-  held: null,       // card the human is holding
+  phase: 'idle',    // idle | choose | holding | decide | roundOver
+  held: null,       // card the current player is holding
+  heldBy: -1,       // who is holding it
   heldFrom: null,   // 'deck' or 'discard'
   difficulty: 'medium',
   bonus: false,     // Bonus Rack-O rules (run bonuses and choosing when to call)
   target: 500,
   round: 0,
-  revealed: false,  // show computer racks (end of round)
-  anim: false,      // true while a human-triggered animation runs
+  revealed: false,  // show everyone's racks (end of round)
+  viewer: 0,        // whose rack this screen shows (-1 = hidden while the device is passed)
+  mySeat: -1,       // online guest: which seat is mine
+  config: null,     // settings used to start this game (for "Play again")
+  busy: false,      // true while this device is animating a move
+  waiting: false,   // online guest: an action was sent and the host hasn't answered yet
+  hostOffline: false,
   token: 0,         // changes when a round starts, cancels stale computer turns
-  log: [],
-  hintSlot: -1,
-  hintPile: null
+  evtSeq: 0,        // numbers each move so online guests can animate it once
+  evt: null,        // the latest move
+  log: [],          // recent moves, newest first
+  result: null,     // end-of-round results
+  shownRound: -1,   // last round whose results this device has shown
+  anim: {},         // display flags while a card is in flight
+  hintSlot: -1, hintPile: null, hintText: ''
 };
 
 const els = {
   scores: $('#scores'), opps: $('#opps'), status: $('#status'),
   deck: $('#deck'), discard: $('#discard'), held: $('#held'),
   deckCount: $('#deckCount'), discardLabel: $('#discardLabel'),
-  rack: $('#rack'), progress: $('#progress'), log: $('#log'),
-  hintBtn: $('#hintBtn'), callBar: $('#callBar'), callText: $('#callText'), runNote: $('#runNote'), celebrate: $('#celebrate'), announce: $('#announce')
+  rack: $('#rack'), rackTitle: $('#rackTitle'), progress: $('#progress'), log: $('#log'),
+  hintBtn: $('#hintBtn'), callBar: $('#callBar'), callText: $('#callText'), runNote: $('#runNote'),
+  seatBar: $('#seatBar'), seatText: $('#seatText'),
+  celebrate: $('#celebrate'), announce: $('#announce')
 };
+
+/* ---------- Seats and points of view ---------- */
+const cur = () => S.players[S.current];
+// Is seat i played on this device?
+function isMine(i) {
+  const p = S.players[i];
+  if (!p) return false;
+  return S.mode === 'client' ? i === S.mySeat && p.kind === 'remote' : p.kind === 'local';
+}
+// Can the person looking at this screen act right now?
+const myTurnNow = () => S.current === S.viewer && isMine(S.current) && !S.busy && !S.waiting;
+const localHumans = () => S.players.filter((p) => p.kind === 'local').length;
+const passing = () => S.mode === 'pass' && localHumans() > 1;
+// "You" for the person at this screen, otherwise the player's name (pass and play always uses names)
+const nameOf = (i) => (i < 0 || !S.players[i] ? '' : S.mode !== 'pass' && i === S.viewer ? 'You' : S.players[i].name);
 
 /* ---------- 3. Rules helpers ---------- */
 const deckSizeFor = (n) => (n === 2 ? 40 : n === 3 ? 50 : 60);
@@ -681,16 +832,6 @@ const runBonus = (len) => (len >= 6 ? 400 : len === 5 ? 200 : len === 4 ? 100 : 
 // Points for going Rack-O with this rack.
 const rackOPoints = (r) => 75 + (S.bonus ? runBonus(longestRun(r)) : 0);
 
-
-// If the deck is empty, shuffle the discard pile (except its top card) into a new deck.
-function ensureDeck() {
-  if (S.deck.length > 0) return;
-  const top = S.discard.pop();
-  S.deck = shuffle(S.discard);
-  S.discard = top == null ? [] : [top];
-  addLog('The deck ran out, so the discard pile was shuffled into a new deck.');
-  Sound.shuffle();
-}
 
 /* ---------- 4. Computer strategies and hints ---------- */
 
@@ -820,30 +961,44 @@ function aiPlanDrawn(r, v, diff) {
   return plan.gain > THRESH[diff].keep ? plan.slot : -1;
 }
 
-/* ---------- 5. Round flow ---------- */
-function newGame({ opponents, difficulty, target, rules }) {
-  S.bonus = rules === 'bonus';
-  S.players = [{ name: 'You', human: true, rack: [], score: 0 }];
-  for (let i = 0; i < opponents; i++) S.players.push({ name: NAMES[i], human: false, rack: [], score: 0 });
+// If the deck is empty, shuffle the discard pile (except its top card) into a new deck.
+function ensureDeck() {
+  if (S.deck.length > 0) return false;
+  const top = S.discard.pop();
+  S.deck = shuffle(S.discard);
+  S.discard = top == null ? [] : [top];
+  addLog({ type: 'reshuffle' });
+  return true;
+}
+
+/* ---------- 5. Round flow (runs on the device that hosts the game) ---------- */
+function newGame(config) {
+  S.config = config;
+  S.mode = config.mode;
+  S.players = config.seats.map((s) => ({ name: s.name, kind: s.kind, uid: s.uid || null, rack: [], score: 0, waited: 0, online: true }));
+  if (S.mode === 'host') S.players.forEach((p) => { if (p.kind === 'remote') p.online = !!(Online.players[p.uid] && Online.players[p.uid].online !== false); });
   S.max = deckSizeFor(S.players.length);
-  S.difficulty = difficulty;
-  S.target = target;
+  S.difficulty = config.difficulty;
+  S.target = config.target;
+  S.bonus = config.rules === 'bonus';
   S.round = 0;
   S.starter = -1;
   S.log = [];
-  $('#scaleMax').textContent = `${S.max}, high`;
-  $('#helpMax').textContent = S.max;
-  $('#helpTarget').textContent = S.target;
+  S.result = null;
+  S.shownRound = -1;
+  S.viewer = passing() ? -1 : S.players.findIndex((p) => p.kind === 'local');
+  updateStaticText();
   startRound();
 }
 
-function startRound() {
+async function startRound() {
   S.token++;
+  const token = S.token;
+  closeDialog(roundDlg);
   S.round++;
   S.starter = (S.starter + 1) % S.players.length;
   S.deck = shuffle(Array.from({ length: S.max }, (_, i) => i + 1));
   S.players.forEach((p) => { p.rack = []; p.waited = 0; });
-
   // Deal one card at a time, filling slot 1 for everyone, then slot 2, and so on.
   for (let slot = 0; slot < RACK; slot++) {
     for (let k = 0; k < S.players.length; k++) {
@@ -851,185 +1006,185 @@ function startRound() {
     }
   }
   S.discard = [S.deck.pop()];
-  S.held = null; S.heldFrom = null; S.revealed = false; S.anim = false;
+  S.held = null; S.heldBy = -1; S.heldFrom = null;
+  S.revealed = false; S.result = null; S.busy = false;
   S.current = S.starter;
-  addLog(`Round ${S.round}: the cards are dealt.`);
-  renderAll(true);
-  Sound.deal(RACK, reduceMotion ? 0.03 : 0.045);
+  S.phase = 'idle';
+  if (passing()) S.viewer = -1;
+  const e = { type: 'deal', round: S.round };
+  addLog(e);
+  await present(e);
+  if (token !== S.token) return;
   startTurn();
 }
 
-function startTurn() {
-  const p = S.players[S.current];
+async function startTurn() {
+  const token = S.token, i = S.current, p = cur();
   clearHint();
-  if (!S.bonus && isRackO(p.rack)) { endRound(S.current); return; } // rare: dealt a perfect rack
-  if (p.human) {
-    S.phase = 'choose';
-    setStatus(`Your turn. Draw from the deck or take the ${topDiscard()} from the discard pile.`);
-  } else {
-    S.phase = 'ai';
-    setStatus(`${p.name}’s turn…`);
+  if (!S.bonus && isRackO(p.rack)) { endRound(i); return; } // rare: dealt a perfect rack
+  S.phase = 'choose';
+  S.held = null; S.heldBy = -1; S.heldFrom = null;
+  if (p.kind === 'local' && passing()) {
+    S.viewer = -1;
+    commit();
+    await passTo(i);
+    if (token !== S.token) return;
+    S.viewer = i;
   }
-  renderAll();
-  if (!p.human) runComputerTurn(S.current, S.token);
+  commit();
+  if (p.kind === 'cpu') runComputerTurn(i, token);
 }
 
-// Called after every turn. Ends the round on a finished rack, or in bonus mode
-// lets the player decide whether to call Rack-O or keep building.
-function nextTurn() {
-  const p = S.players[S.current];
-  if (isRackO(p.rack)) {
-    if (!S.bonus) { endRound(S.current); return; }
-    if (p.human) { offerCall(); return; }
-    if (aiWantsToCall(p)) { endRound(S.current); return; }
-    p.waited = (p.waited || 0) + 1;
-  }
-  advanceTurn();
-}
 function advanceTurn() {
+  if (passing()) S.viewer = -1;          // hide the rack before the device changes hands
   S.current = (S.current + 1) % S.players.length;
   startTurn();
 }
 
-// Bonus mode: the human's rack is in order, so show the call / keep building choice.
-function offerCall() {
-  const r = S.players[0].rack;
-  const run = longestRun(r), pts = rackOPoints(r);
-  S.phase = 'decide';
-  clearHint();
-  const runText = run >= 3 ? `Your longest run is ${run} cards, so calling now scores ${pts} points.` : `You don’t have a run of 3 yet, so calling now scores ${pts} points.`;
-  const next = run >= 6 ? '' : ` A run of ${Math.max(3, run + 1)} would be worth ${75 + runBonus(Math.max(3, run + 1))}.`;
-  els.callText.textContent = `Your rack is in order! ${runText}${next}`;
-  setStatus('Call Rack-O now, or keep building for a bigger run.');
-  Sound.chime();
-  renderAll();
-  $('#callBtn').textContent = `Call Rack-O (${pts} points)`;
-  $('#callBtn').focus();
+// After a card is placed or discarded: end the round, offer the call, or move on.
+async function afterMove(i) {
+  const token = S.token, p = S.players[i];
+  if (isRackO(p.rack)) {
+    if (!S.bonus) { endRound(i); return; }
+    if (p.kind === 'cpu') {
+      if (aiWantsToCall(p)) { endRound(i); return; }
+      p.waited = (p.waited || 0) + 1;
+    } else {
+      S.phase = 'decide';                // the player decides on their own device
+      commit();
+      if (isMine(i)) Sound.chime();
+      return;
+    }
+  }
+  await sleep(p.kind === 'cpu' ? (reduceMotion ? 300 : 700) : 250);
+  if (token !== S.token) return;
+  advanceTurn();
 }
 
-async function endRound(winnerIdx) {
+async function endRound(w) {
   S.phase = 'roundOver';
   S.revealed = true;
+  S.busy = true;
   clearHint();
-  const winner = S.players[winnerIdx];
-  addLog(winner.human ? 'You called Rack-O!' : `${winner.name} called Rack-O!`);
-  setStatus(winner.human ? 'Rack-O! You lined them all up.' : `${winner.name} called Rack-O!`);
-
   const rows = S.players.map((p, i) => {
     const count = inOrderCount(p.rack);
-    const win = i === winnerIdx;
-    const run = longestRun(p.rack);
+    const win = i === w;
     const pts = win ? rackOPoints(p.rack) : count * 5;
     p.score += pts;
-    return { p, count, pts, win, run };
+    return { count, pts, win, run: longestRun(p.rack) };
   });
-  renderAll();
   const top = Math.max(...S.players.map((p) => p.score));
-  const champs = S.players.filter((p) => p.score === top);
-  S.matchMusicPlayed = top >= S.target && champs.length === 1 && champs[0].human && winner.human;
-  await celebrate(winner);
-  showRoundSummary(rows, winner);
+  S.result = {
+    winner: w, rows, over: top >= S.target,
+    leaders: S.players.map((p, i) => (p.score === top ? i : -1)).filter((i) => i >= 0)
+  };
+  const e = { type: 'rackO', p: w };
+  addLog(e);
+  await present(e);
+  S.busy = false;
 }
 
-/* ---------- 6. Human actions ---------- */
-async function onDeckClick() {
-  if (S.phase !== 'choose' || S.anim) return;
-  ensureDeck();
-  S.anim = true;
+/* ---------- Moves. Each checks it's allowed, updates the game, then shows it. ---------- */
+async function actDraw(i) {
+  if (S.busy || i !== S.current || S.phase !== 'choose') return;
+  S.busy = true; clearHint();
+  if (ensureDeck()) await present({ type: 'reshuffle' });
   const v = S.deck.pop();
-  clearHint();
-  renderPiles();
-  Sound.pickUp();
-  await fly({ from: els.deck, to: els.held, value: v });
-  S.held = v; S.heldFrom = 'deck'; S.phase = 'holding'; S.anim = false;
-  setStatus(`You drew a ${v}. Tap a slot to swap it in, or tap the discard pile to throw it away.`);
-  renderAll();
+  S.held = v; S.heldBy = i; S.heldFrom = 'deck'; S.phase = 'holding';
+  await present({ type: 'draw', p: i, value: v });
+  S.busy = false;
+  commit();
 }
 
-async function onDiscardClick() {
-  if (S.anim) return;
-  if (S.phase === 'choose' && S.discard.length) {
-    S.anim = true;
-    const v = S.discard.pop();
-    clearHint();
-    renderPiles();
-    Sound.pickUp();
-    await fly({ from: els.discard, to: els.held, value: v });
-    S.held = v; S.heldFrom = 'discard'; S.phase = 'holding'; S.anim = false;
-    setStatus(`You took the ${v}. Tap the slot you want to put it in.`);
-    renderAll();
-  } else if (S.phase === 'holding' && S.heldFrom === 'deck') {
-    S.anim = true;
-    const v = S.held;
-    S.held = null;
-    clearHint();
-    renderPiles();
-    Sound.discard();
-    await fly({ from: els.held, to: els.discard, value: v });
-    S.discard.push(v);
-    S.anim = false;
-    S.phase = 'idle';
-    addLog(`You discarded the ${v}.`);
-    renderAll();
-    nextTurn();
-  }
+async function actTake(i) {
+  if (S.busy || i !== S.current || S.phase !== 'choose' || !S.discard.length) return;
+  S.busy = true; clearHint();
+  const v = S.discard.pop();
+  S.held = v; S.heldBy = i; S.heldFrom = 'discard'; S.phase = 'holding';
+  await present({ type: 'take', p: i, value: v });
+  S.busy = false;
+  commit();
 }
 
-async function onSlotClick(i) {
-  if (S.phase !== 'holding' || S.anim) return;
-  const rack = S.players[0].rack;
-  const v = S.held, old = rack[i];
-  S.anim = true;
-  S.held = null;
-  clearHint();
-  renderPiles();
-
-  const slotEl = els.rack.children[i];
-  const bar = slotEl.querySelector('.bar.real');
-  const track = slotEl.querySelector('.track');
-  const oldRect = bar.getBoundingClientRect();
-  const tr = track.getBoundingClientRect();
-  // Where the new card will sit inside the slot
-  const newRect = new DOMRect(tr.left + pos(v) * (tr.width - oldRect.width), oldRect.top, oldRect.width, oldRect.height);
-  bar.style.visibility = 'hidden';
-  const ghost = slotEl.querySelector('.bar.ghost'); if (ghost) ghost.remove();
-
-  const runBefore = longestRun(rack);
-  Sound.discard(0.8);
-  await Promise.all([
-    fly({ from: oldRect, to: els.discard, value: old }),
-    fly({ from: els.held, to: newRect, value: v, delay: 90 })
-  ]);
-  rack[i] = v;
-  Sound.place();
-  if (S.bonus && longestRun(rack) >= 3 && longestRun(rack) > runBefore) Sound.sparkle();
+async function actPlace(i, slot) {
+  if (S.busy || i !== S.current || S.phase !== 'holding' || S.heldBy !== i) return;
+  if (!(Number.isInteger(slot) && slot >= 0 && slot < RACK)) return;
+  S.busy = true; clearHint();
+  const r = S.players[i].rack, v = S.held, old = r[slot], runBefore = longestRun(r);
+  r[slot] = v;
   S.discard.push(old);
-  S.anim = false;
-  S.phase = 'idle';
-  addLog(`You put the ${v} in slot ${i + 1} and discarded the ${old}.`);
-  renderAll();
-  const placed = els.rack.children[i].querySelector('.bar.real');
-  if (placed && !reduceMotion) placed.classList.add('pop');
-  if (isRackO(rack)) { nextTurn(); return; }
-  await sleep(250);
-  nextTurn();
+  const from = S.heldFrom;
+  S.held = null; S.heldBy = -1; S.heldFrom = null; S.phase = 'idle';
+  const e = { type: 'place', p: i, slot, value: v, old, from, grew: S.bonus && longestRun(r) >= 3 && longestRun(r) > runBefore };
+  addLog(e);
+  await present(e);
+  S.busy = false;
+  afterMove(i);
 }
+
+async function actThrow(i) {
+  if (S.busy || i !== S.current || S.phase !== 'holding' || S.heldBy !== i || S.heldFrom !== 'deck') return;
+  S.busy = true; clearHint();
+  const v = S.held;
+  S.discard.push(v);
+  S.held = null; S.heldBy = -1; S.heldFrom = null; S.phase = 'idle';
+  const e = { type: 'throw', p: i, value: v };
+  addLog(e);
+  await present(e);
+  S.busy = false;
+  afterMove(i);
+}
+
+function actCall(i) { if (!S.busy && i === S.current && S.phase === 'decide') endRound(i); }
+function actKeep(i) {
+  if (S.busy || i !== S.current || S.phase !== 'decide') return;
+  S.phase = 'idle';
+  advanceTurn();
+}
+
+// Online host: a guest has left, so a computer player takes over their seat.
+function takeOver(i) {
+  const p = S.players[i];
+  if (!p || p.kind !== 'remote') return;
+  p.kind = 'cpu';
+  addLog({ type: 'takeover', p: i });
+  commit();
+  if (i === S.current && !S.busy && S.phase !== 'roundOver') runComputerTurn(i, S.token);
+}
+
+/* ---------- 6. Human actions on this device ---------- */
+function act(type, slot) {
+  if (!myTurnNow()) return;
+  if (S.mode === 'client') { Online.send(type, slot); return; }
+  const i = S.current;
+  if (type === 'draw') actDraw(i);
+  else if (type === 'take') actTake(i);
+  else if (type === 'place') actPlace(i, slot);
+  else if (type === 'throw') actThrow(i);
+  else if (type === 'call') actCall(i);
+  else if (type === 'keep') actKeep(i);
+}
+function onDeckClick() { if (S.phase === 'choose') act('draw'); }
+function onDiscardClick() {
+  if (S.phase === 'choose') act('take');
+  else if (S.phase === 'holding' && S.heldFrom === 'deck') act('throw');
+}
+function onSlotClick(i) { if (S.phase === 'holding') act('place', i); }
 
 function showHint() {
-  const me = S.players[0];
-  if (!me || S.players[S.current] !== me) return;
-  const r = me.rack;
-  if (S.bonus && isRackO(r) && (S.phase === 'choose' || S.phase === 'holding')) {
+  if (!myTurnNow()) return;
+  const r = S.players[S.viewer].rack;
+  if (S.bonus && isRackO(r)) {
     if (S.phase === 'choose') {
       const t = topDiscard();
       const slot = t == null ? -1 : runPlan(r, t);
-      if (slot >= 0) { S.hintPile = 'discard'; S.hintSlot = slot; setStatus(`Hint: take the ${t} and put it in slot ${slot + 1} to grow your run.`); }
-      else { S.hintPile = 'deck'; S.hintSlot = -1; setStatus(`Hint: draw from the deck. The ${t} wouldn’t grow your run.`); }
-    } else {
+      if (slot >= 0) { S.hintPile = 'discard'; S.hintSlot = slot; S.hintText = `Hint: take the ${t} and put it in slot ${slot + 1} to grow your run.`; }
+      else { S.hintPile = 'deck'; S.hintSlot = -1; S.hintText = `Hint: draw from the deck. The ${t} wouldn’t grow your run.`; }
+    } else if (S.phase === 'holding') {
       const slot = runPlan(r, S.held);
-      if (slot >= 0) { S.hintPile = null; S.hintSlot = slot; setStatus(`Hint: put the ${S.held} in slot ${slot + 1} to grow your run.`); }
-      else if (S.heldFrom === 'deck') { S.hintPile = 'discard'; S.hintSlot = -1; setStatus(`Hint: discard the ${S.held} to keep your rack in order.`); }
-      else { const plan = strategies.hard(r, S.held); S.hintPile = null; S.hintSlot = plan.slot; setStatus(`Hint: put the ${S.held} in slot ${plan.slot + 1}.`); }
+      if (slot >= 0) { S.hintPile = null; S.hintSlot = slot; S.hintText = `Hint: put the ${S.held} in slot ${slot + 1} to grow your run.`; }
+      else if (S.heldFrom === 'deck') { S.hintPile = 'discard'; S.hintSlot = -1; S.hintText = `Hint: discard the ${S.held} to keep your rack in order.`; }
+      else { const plan = strategies.hard(r, S.held); S.hintPile = null; S.hintSlot = plan.slot; S.hintText = `Hint: put the ${S.held} in slot ${plan.slot + 1}.`; }
     }
     renderAll();
     return;
@@ -1040,142 +1195,242 @@ function showHint() {
     const plan = t == null ? { gain: -99 } : strategies.hard(r, t);
     if (win >= 0 || plan.gain >= THRESH.hard.take) {
       S.hintPile = 'discard'; S.hintSlot = win >= 0 ? win : plan.slot;
-      setStatus(`Hint: take the ${t} and put it in slot ${S.hintSlot + 1}.`);
+      S.hintText = `Hint: take the ${t} and put it in slot ${S.hintSlot + 1}.`;
     } else {
       S.hintPile = 'deck'; S.hintSlot = -1;
-      setStatus(`Hint: draw from the deck. The ${t} wouldn’t improve your rack much.`);
+      S.hintText = `Hint: draw from the deck. The ${t} wouldn’t improve your rack much.`;
     }
   } else if (S.phase === 'holding') {
     const win = winningSlot(r, S.held);
     const plan = strategies.hard(r, S.held);
     if (S.heldFrom === 'deck' && win < 0 && plan.gain <= 0) {
       S.hintPile = 'discard'; S.hintSlot = -1;
-      setStatus(`Hint: discard the ${S.held}. It wouldn’t help any slot.`);
+      S.hintText = `Hint: discard the ${S.held}. It wouldn’t help any slot.`;
     } else {
       S.hintPile = null; S.hintSlot = win >= 0 ? win : plan.slot;
-      setStatus(`Hint: put the ${S.held} in slot ${S.hintSlot + 1}.`);
+      S.hintText = `Hint: put the ${S.held} in slot ${S.hintSlot + 1}.`;
     }
   }
   renderAll();
 }
-function clearHint() { S.hintSlot = -1; S.hintPile = null; }
+function clearHint() { S.hintSlot = -1; S.hintPile = null; S.hintText = ''; }
 
 /* ---------- 7. Computer turns ---------- */
-async function runComputerTurn(idx, token) {
-  const p = S.players[idx];
-  const stale = () => token !== S.token || S.phase !== 'ai';
-  const row = (slot) => els.opps.querySelector(`[data-p="${idx}"] .mini-row:nth-child(${slot + 1})`);
-  const miniRack = () => els.opps.querySelector(`[data-p="${idx}"] .mini`);
-
+async function runComputerTurn(i, token) {
+  const stale = () => token !== S.token || S.current !== i || S.players[i].kind !== 'cpu';
   await sleep(reduceMotion ? 300 : 800);
   if (stale()) return;
-
-  const t = topDiscard();
-  const takeSlot = aiPlanDiscard(p.rack, t, S.difficulty);
-  let msg;
-
-  if (takeSlot >= 0) {
-    // Take the face-up card from the discard pile
-    S.discard.pop(); renderPiles();
-    Sound.pickUp(0.6);
-    await fly({ from: els.discard, to: row(takeSlot), value: t });
-    if (stale()) return;
-    Sound.place(0.6);
-    const old = p.rack[takeSlot];
-    p.rack[takeSlot] = t;
-    Sound.discard(0.6);
-    await fly({ from: row(takeSlot), to: els.discard, value: old });
-    if (stale()) return;
-    S.discard.push(old);
-    msg = `${p.name} took the ${t} from the discard pile and put it in slot ${takeSlot + 1}, discarding the ${old}.`;
-  } else {
-    // Draw a hidden card from the deck
-    ensureDeck();
-    const v = S.deck.pop(); renderPiles();
-    Sound.pickUp(0.6);
-    await fly({ from: els.deck, to: miniRack(), value: v, back: true });
+  const p = S.players[i];
+  if (S.phase === 'decide') {               // a computer took over while a call was pending
+    if (aiWantsToCall(p)) endRound(i); else { p.waited = (p.waited || 0) + 1; advanceTurn(); }
+    return;
+  }
+  if (S.phase === 'choose') {
+    const t = topDiscard();
+    const take = aiPlanDiscard(p.rack, t, S.difficulty);
+    if (take >= 0) {
+      await actTake(i);
+      if (stale()) return;
+      await sleep(reduceMotion ? 50 : 200);
+      if (stale()) return;
+      await actPlace(i, take);
+      return;
+    }
+    await actDraw(i);
     if (stale()) return;
     await sleep(reduceMotion ? 100 : 350);
-    const slot = aiPlanDrawn(p.rack, v, S.difficulty);
-    if (slot >= 0) {
-      const old = p.rack[slot];
-      p.rack[slot] = v;
-      Sound.place(0.6);
-      Sound.discard(0.6);
-      await fly({ from: row(slot), to: els.discard, value: old });
-      if (stale()) return;
-      S.discard.push(old);
-      msg = `${p.name} drew from the deck, put it in slot ${slot + 1}, and discarded the ${old}.`;
-    } else {
-      Sound.discard(0.6);
-      await fly({ from: miniRack(), to: els.discard, value: v });
-      if (stale()) return;
-      S.discard.push(v);
-      msg = `${p.name} drew a ${v} from the deck and discarded it.`;
-    }
+    if (stale()) return;
   }
-  addLog(msg);
-  setStatus(msg);
-  renderAll();
-  await sleep(reduceMotion ? 300 : 700);
-  if (stale()) return;
-  nextTurn();
+  if (S.phase === 'holding') {
+    let slot = S.heldFrom === 'deck' ? aiPlanDrawn(p.rack, S.held, S.difficulty) : aiPlanDiscard(p.rack, S.held, S.difficulty);
+    if (slot < 0 && S.heldFrom !== 'deck') slot = strategies[S.difficulty](p.rack, S.held).slot;
+    if (slot >= 0) await actPlace(i, slot); else await actThrow(i);
+  }
 }
 
-/* ---------- 8. Rendering ---------- */
+/* ---------- 8. Showing moves: animation and sound (same on every device) ---------- */
+// Record a move, send it to online guests, and animate it here.
+async function present(e) {
+  S.evt = { ...e, seq: ++S.evtSeq };
+  broadcast();
+  await animate(S.evt);
+  if (e.type !== 'rackO') renderAll();
+}
+
+const miniRack = (p) => els.opps.querySelector(`[data-p="${p}"] .mini`);
+const miniRow = (p, slot) => els.opps.querySelector(`[data-p="${p}"] .mini-row:nth-child(${slot + 1})`);
+
+async function animate(e) {
+  const me = e.p != null && e.p >= 0 && e.p === S.viewer;
+  const vol = isMine(e.p) ? 1 : 0.6;
+  switch (e.type) {
+    case 'deal':
+      closeDialog(roundDlg);
+      renderAll(true);
+      Sound.deal(RACK, reduceMotion ? 0.03 : 0.045);
+      await sleep(reduceMotion ? 50 : 450);
+      break;
+    case 'reshuffle':
+      renderAll(); Sound.shuffle(); await sleep(300);
+      break;
+    case 'draw':
+    case 'take': {
+      S.anim = { hideHeld: true }; renderAll();
+      Sound.pickUp(vol);
+      await fly({ from: e.type === 'draw' ? els.deck : els.discard, to: me ? els.held : miniRack(e.p), value: e.value, back: e.type === 'draw' && !me });
+      S.anim = {};
+      break;
+    }
+    case 'place': {
+      S.anim = { hideSlot: me ? e.slot : -1, hideDiscardTop: true }; renderAll();
+      if (me) {
+        const slotEl = els.rack.children[e.slot];
+        const bar = slotEl.querySelector('.bar.real');
+        const tr = slotEl.querySelector('.track').getBoundingClientRect();
+        const br = bar.getBoundingClientRect();
+        const oldRect = new DOMRect(tr.left + pos(e.old) * (tr.width - br.width), br.top, br.width, br.height);
+        Sound.discard(0.8);
+        await Promise.all([
+          fly({ from: oldRect, to: els.discard, value: e.old }),
+          fly({ from: els.held, to: br, value: e.value, delay: 90 })
+        ]);
+        Sound.place();
+        S.anim = {}; renderAll();
+        const placed = els.rack.children[e.slot] && els.rack.children[e.slot].querySelector('.bar.real');
+        if (placed && !reduceMotion) placed.classList.add('pop');
+      } else {
+        Sound.place(vol); Sound.discard(vol);
+        await fly({ from: miniRow(e.p, e.slot), to: els.discard, value: e.old });
+        S.anim = {};
+      }
+      if (e.grew && isMine(e.p)) Sound.sparkle();
+      break;
+    }
+    case 'throw': {
+      S.anim = { hideDiscardTop: true }; renderAll();
+      Sound.discard(vol);
+      await fly({ from: me ? els.held : miniRack(e.p), to: els.discard, value: e.value });
+      S.anim = {};
+      break;
+    }
+    case 'rackO':
+      await showRackO(e.p);
+      break;
+  }
+}
+
+// Celebration, round results, and the right music for this device.
+async function showRackO(w) {
+  if (S.shownRound === S.round || !S.result) return;
+  S.shownRound = S.round;
+  renderAll();
+  const res = S.result;
+  const mineWin = isMine(w);
+  const matchMine = res.over && res.leaders.length === 1 && isMine(res.leaders[0]);
+  await celebrate(w, mineWin ? (matchMine ? 'match' : 'round') : 'rival');
+  showRoundSummary();
+  if (res.over) { if (matchMine && !mineWin) Sound.matchWin(); else if (!matchMine) Sound.gameOver(); }
+}
+
+/* ---------- 9. Rendering ---------- */
 function cardHTML(v) { return `<div class="pcard face" style="--h:${hue(v)}"><span>${v}</span></div>`; }
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function setStatus(text) { els.status.textContent = text; }
-
-function addLog(text) {
-  S.log.unshift(text);
+function addLog(e) {
+  S.log.unshift(e);
   S.log = S.log.slice(0, 6);
-  renderLog();
+}
+
+// Turn a move into a sentence for this screen ("You" here, a name on other screens).
+function describe(e) {
+  const n = nameOf(e.p), you = n === 'You';
+  switch (e.type) {
+    case 'deal': return `Round ${e.round}: the cards are dealt.`;
+    case 'reshuffle': return 'The deck ran out, so the discard pile was shuffled into a new deck.';
+    case 'place':
+      if (e.from === 'discard') return `${n} took the ${e.value} from the discard pile and put it in slot ${e.slot + 1}, discarding the ${e.old}.`;
+      return you ? `You put the ${e.value} in slot ${e.slot + 1} and discarded the ${e.old}.` : `${n} drew from the deck, put it in slot ${e.slot + 1}, and discarded the ${e.old}.`;
+    case 'throw': return you ? `You discarded the ${e.value}.` : `${n} drew a ${e.value} from the deck and discarded it.`;
+    case 'rackO': return `${n} called Rack-O!`;
+    case 'takeover': return `The computer is now playing for ${S.players[e.p] ? S.players[e.p].name : 'a player'}.`;
+    default: return '';
+  }
+}
+
+function statusText() {
+  if (S.hintText) return S.hintText;
+  if (!S.players.length) return 'Choose your game settings to start.';
+  if (S.mode === 'client' && S.hostOffline) return 'The host lost connection. Waiting for them to come back…';
+  if (S.mode === 'client' && S.mySeat < 0) return 'This game started without you.';
+  const i = S.current, p = cur(), mine = isMine(i) && S.viewer === i, t = topDiscard();
+  const yourTurn = S.mode === 'pass' ? `Your turn, ${p.name}.` : 'Your turn.';
+  if (S.phase === 'roundOver') {
+    const w = S.result ? S.result.winner : -1;
+    return nameOf(w) === 'You' ? 'Rack-O! You lined them all up.' : `${nameOf(w)} called Rack-O!`;
+  }
+  if (S.phase === 'idle') return '';
+  if (mine) {
+    if (S.phase === 'choose') return t == null ? `${yourTurn} Draw from the deck.` : `${yourTurn} Draw from the deck or take the ${t} from the discard pile.`;
+    if (S.phase === 'holding') return S.heldFrom === 'deck'
+      ? `You drew a ${S.held}. Tap a slot to swap it in, or tap the discard pile to throw it away.`
+      : `You took the ${S.held}. Tap the slot you want to put it in.`;
+    if (S.phase === 'decide') return 'Call Rack-O now, or keep building for a bigger run.';
+  }
+  if (p.kind !== 'cpu' && p.online === false) return `Waiting for ${p.name} to reconnect…`;
+  if (S.mode === 'pass' && S.viewer < 0 && p.kind === 'local') return `Pass the device to ${p.name}.`;
+  return `${p.name}’s turn…`;
 }
 
 function renderAll(deal = false) {
   renderScores(); renderOpponents(); renderPiles(); renderRack(deal); renderLog();
-  const myTurn = S.players[S.current] && S.players[S.current].human;
-  els.hintBtn.disabled = !(myTurn && (S.phase === 'choose' || S.phase === 'holding'));
-  els.callBar.hidden = S.phase !== 'decide';
+  els.status.textContent = statusText();
+  const canHint = myTurnNow() && (S.phase === 'choose' || S.phase === 'holding');
+  els.hintBtn.disabled = !canHint;
+  renderCallBar();
+  renderSeatBar();
 }
 
 function renderScores() {
   const chips = S.players.map((p, i) => {
     const turn = i === S.current && S.phase !== 'roundOver' && S.phase !== 'idle';
-    return `<span class="chip ${turn ? 'turn' : ''}"><b>${p.name}</b><span class="pts">${p.score}</span></span>`;
+    return `<span class="chip ${turn ? 'turn' : ''}"><b>${esc(nameOf(i))}</b><span class="pts">${p.score}</span></span>`;
   }).join('');
   els.scores.innerHTML = chips + (S.players.length ? `<span class="goal-chip">Round ${S.round}, first to ${S.target}${S.bonus ? ', bonus runs' : ''}</span>` : '');
 }
 
 function renderOpponents() {
-  els.opps.innerHTML = S.players.slice(1).map((p, k) => {
-    const i = k + 1;
-    const turn = i === S.current && S.phase === 'ai';
+  els.opps.innerHTML = S.players.map((p, i) => {
+    if (i === S.viewer) return '';
+    const turn = i === S.current && S.phase !== 'roundOver' && S.phase !== 'idle';
     const rows = p.rack.map((v) => S.revealed
       ? `<div class="mini-row"><div class="mini-card face" style="--pos:${pos(v)};--h:${hue(v)}">${v}</div></div>`
       : `<div class="mini-row"><div class="mini-card back"></div></div>`).join('');
+    const offline = p.kind !== 'cpu' && p.online === false;
+    const tag = S.mode === 'solo' ? '' : `<div class="opp-tag">${p.kind === 'cpu' ? 'Computer' : offline ? 'Offline' : 'Player'}</div>`;
     const note = S.revealed ? `<div class="opp-note">${inOrderCount(p.rack)} in order</div>` : '';
-    return `<div class="opp ${turn ? 'turn' : ''} ${S.revealed ? 'revealed' : ''}" data-p="${i}">
-      <div class="opp-head"><span>${p.name}</span><span class="pts">${p.score}</span></div>
-      <div class="mini" aria-label="${p.name}’s rack">${rows}</div>${note}</div>`;
+    return `<div class="opp ${turn ? 'turn' : ''} ${S.revealed ? 'revealed' : ''} ${offline ? 'offline' : ''}" data-p="${i}">
+      <div class="opp-head"><span>${esc(p.name)}</span><span class="pts">${p.score}</span></div>${tag}
+      <div class="mini" aria-label="${esc(p.name)}’s rack">${rows}</div>${note}</div>`;
   }).join('');
 }
 
 function renderPiles() {
-  const t = topDiscard();
+  const hideTop = !!S.anim.hideDiscardTop;
+  const t = S.discard.length - (hideTop ? 2 : 1) >= 0 ? S.discard[S.discard.length - (hideTop ? 2 : 1)] : null;
   els.deck.innerHTML = S.deck.length ? '<div class="pcard back"></div>' : '<div class="pcard empty">Empty</div>';
   els.deckCount.textContent = `Deck (${S.deck.length})`;
   els.discard.innerHTML = t != null ? cardHTML(t) : '<div class="pcard empty">Empty</div>';
-  els.held.innerHTML = S.held != null ? cardHTML(S.held) : '<div class="pcard empty"></div>';
+  const showHeld = S.held != null && S.heldBy === S.viewer && S.viewer >= 0 && !S.anim.hideHeld;
+  els.held.innerHTML = showHeld ? cardHTML(S.held) : '<div class="pcard empty"></div>';
 
-  const canDeck = S.phase === 'choose';
-  const throwAway = S.phase === 'holding' && S.heldFrom === 'deck';
-  const canDiscard = (S.phase === 'choose' && t != null) || throwAway;
+  const mine = myTurnNow();
+  const canDeck = mine && S.phase === 'choose';
+  const throwAway = mine && S.phase === 'holding' && S.heldFrom === 'deck';
+  const canDiscard = (mine && S.phase === 'choose' && topDiscard() != null) || throwAway;
   els.deck.disabled = !canDeck;
   els.discard.disabled = !canDiscard;
-  els.deck.classList.toggle('can', canDeck && !S.anim);
-  els.discard.classList.toggle('can', canDiscard && !S.anim);
+  els.deck.classList.toggle('can', canDeck);
+  els.discard.classList.toggle('can', canDiscard);
   els.deck.classList.toggle('hinted', S.hintPile === 'deck');
   els.discard.classList.toggle('hinted', S.hintPile === 'discard');
   els.discardLabel.textContent = throwAway ? 'Throw it here' : 'Discard';
@@ -1183,22 +1438,35 @@ function renderPiles() {
 }
 
 function renderRack(deal = false) {
-  const me = S.players[0];
-  if (!me) { els.rack.innerHTML = ''; return; }
+  const v = S.viewer, me = S.players[v];
+  els.rack.classList.toggle('deal', deal && !reduceMotion);
+  if (!me) {
+    // Nobody's rack is shown while the device is being passed
+    els.rack.classList.add('hidden-rack');
+    els.rack.classList.remove('holding');
+    els.rackTitle.textContent = S.players.length ? 'Racks are hidden' : 'Your rack';
+    els.progress.textContent = S.players.length ? 'Pass the device to the next player.' : '';
+    els.progress.classList.remove('good');
+    els.runNote.hidden = true;
+    els.rack.innerHTML = Array.from({ length: RACK }, (_, i) => `
+      <li><div class="slot"><span class="slotnum">${i + 1}</span><span class="track"></span></div></li>`).join('');
+    return;
+  }
+  els.rack.classList.remove('hidden-rack');
   const r = me.rack;
-  const holding = S.phase === 'holding' && S.held != null;
+  const holding = S.phase === 'holding' && S.held != null && S.heldBy === v && myTurnNow();
   const count = inOrderCount(r);
   const runs = S.bonus ? runSlots(r) : new Set();
+  els.rackTitle.textContent = S.mode === 'pass' ? `${me.name}’s rack` : 'Your rack';
   els.rack.classList.toggle('holding', holding);
-  els.rack.classList.toggle('deal', deal && !reduceMotion);
-  els.rack.innerHTML = r.map((v, i) => `
+  els.rack.innerHTML = r.map((val, i) => `
     <li><button class="slot ${i < count ? 'inorder' : ''} ${runs.has(i) ? 'run' : ''} ${S.hintSlot === i ? 'hinted' : ''}" data-i="${i}" ${holding ? '' : 'disabled'}
-      aria-label="Slot ${i + 1}, ${v}${i < count ? ', in order' : ''}${holding ? `. Swap in the ${S.held}` : ''}">
+      aria-label="Slot ${i + 1}, ${val}${i < count ? ', in order' : ''}${holding ? `. Swap in the ${S.held}` : ''}">
       <span class="slotnum">${i + 1}</span>
       <span class="track">
         <span class="tick" style="--pos:${i / (RACK - 1)}"></span>
         ${holding ? `<span class="bar ghost" style="--pos:${pos(S.held)};--h:${hue(S.held)}">${S.held}</span>` : ''}
-        <span class="bar real" style="--pos:${pos(v)};--h:${hue(v)};animation-delay:${i * 45}ms">${v}</span>
+        <span class="bar real" style="--pos:${pos(val)};--h:${hue(val)};animation-delay:${i * 45}ms${S.anim.hideSlot === i ? ';visibility:hidden' : ''}">${val}</span>
       </span>
     </button></li>`).join('');
   els.progress.classList.toggle('good', count >= 5);
@@ -1212,9 +1480,40 @@ function renderRack(deal = false) {
   }
 }
 
-function renderLog() { els.log.innerHTML = S.log.map((t) => `<li>${t}</li>`).join(''); }
+function renderCallBar() {
+  const show = S.phase === 'decide' && S.current === S.viewer && isMine(S.current) && !S.waiting;
+  els.callBar.hidden = !show;
+  if (!show) return;
+  const r = S.players[S.viewer].rack, run = longestRun(r), pts = rackOPoints(r);
+  const runText = run >= 3 ? `Your longest run is ${run} cards, so calling now scores ${pts} points.` : `You don’t have a run of 3 yet, so calling now scores ${pts} points.`;
+  const nextLen = Math.max(3, run + 1);
+  const next = run >= 6 ? '' : ` A run of ${nextLen} would be worth ${75 + runBonus(nextLen)}.`;
+  els.callText.textContent = `Your rack is in order! ${runText}${next}`;
+  $('#callBtn').textContent = `Call Rack-O (${pts} points)`;
+}
 
-/* ---------- 9. Animations ---------- */
+// Online host: offer to let a computer play for someone who disconnected.
+function renderSeatBar() {
+  const p = cur();
+  const show = S.mode === 'host' && p && p.kind === 'remote' && p.online === false && ['choose', 'holding', 'decide'].includes(S.phase);
+  els.seatBar.hidden = !show;
+  if (!show) return;
+  els.seatText.textContent = `${p.name} lost connection. You can wait for them to come back, or let the computer finish the game for them.`;
+  $('#takeoverBtn').textContent = `Let the computer play for ${p.name}`;
+}
+
+function renderLog() { els.log.innerHTML = S.log.map((e) => `<li>${esc(describe(e))}</li>`).join(''); }
+
+// Show the current state and send it to online guests.
+function commit() { renderAll(); broadcast(); }
+
+function updateStaticText() {
+  $('#scaleMax').textContent = `${S.max}, high`;
+  $('#helpMax').textContent = S.max;
+  $('#helpTarget').textContent = S.target;
+}
+
+/* ---------- 10. Animations ---------- */
 const rectOf = (x) => (x instanceof Element ? x.getBoundingClientRect() : x);
 
 // Fly a card from one place to another. `from` and `to` may be elements or DOMRects.
@@ -1235,22 +1534,22 @@ function fly({ from, to, value, back = false, delay = 0, duration = 480 }) {
   return anim.finished.then(() => el.remove(), () => el.remove());
 }
 
-// Big "Rack-O!" moment with falling cards.
-function celebrate(winner) {
+// Big "Rack-O!" moment with falling cards. music: 'round', 'match' or 'rival'.
+function celebrate(w, music) {
   return new Promise((resolve) => {
     const ov = els.celebrate;
-    ov.innerHTML = '';
-    ov.hidden = false;
-    els.announce.textContent = winner.human ? 'Rack-O! You called it.' : `Rack-O! ${winner.name} called it.`;
-
-    const burst = document.createElement('div'); burst.className = 'burst';
-    const stamp = document.createElement('div'); stamp.className = 'stamp';
+    const winner = S.players[w];
+    const label = nameOf(w) === 'You' ? 'You called it' : `${winner.name} called it`;
     const run = longestRun(winner.rack);
     const runText = S.bonus && run >= 3 ? `, with a run of ${run}` : '';
-    stamp.innerHTML = `Rack-O!<small>${winner.human ? 'You called it' : winner.name + ' called it'}${runText}</small>`;
+    ov.innerHTML = '';
+    ov.hidden = false;
+    els.announce.textContent = `Rack-O! ${label}${runText}.`;
+    const burst = document.createElement('div'); burst.className = 'burst';
+    const stamp = document.createElement('div'); stamp.className = 'stamp';
+    stamp.innerHTML = `Rack-O!<small>${esc(label + runText)}</small>`;
     ov.append(burst, stamp);
-    if (winner.human) { if (S.matchMusicPlayed) Sound.matchWin(); else Sound.roundWin(); }
-    else Sound.rival();
+    if (music === 'match') Sound.matchWin(); else if (music === 'round') Sound.roundWin(); else Sound.rival();
 
     if (!reduceMotion) {
       burst.animate([{ transform: 'scale(.2) rotate(0deg)', opacity: 0 }, { transform: 'scale(1) rotate(60deg)', opacity: 1 }],
@@ -1260,7 +1559,7 @@ function celebrate(winner) {
         { transform: 'rotate(-8deg) scale(.92)', opacity: 1, offset: 0.6 },
         { transform: 'rotate(-8deg) scale(1)', opacity: 1 }
       ], { duration: 700, easing: 'cubic-bezier(.2,.9,.3,1.3)' });
-      for (let i = 0; i < 70; i++) {
+      for (let k = 0; k < 70; k++) {
         const v = 1 + Math.floor(Math.random() * S.max);
         const c = document.createElement('div');
         c.className = 'confetti';
@@ -1278,8 +1577,225 @@ function celebrate(winner) {
   });
 }
 
-/* ---------- 10. Dialogs and startup ---------- */
-const setupDlg = $('#setupDlg'), helpDlg = $('#helpDlg'), roundDlg = $('#roundDlg');
+/* ---------- 11. Online play (Firebase Realtime Database) ----------
+   The person who creates a room is the host: their device runs the game, including
+   any computer players. Guests send their moves to the host, and the host sends
+   the updated table back to everyone. */
+
+// A thin wrapper around Firebase, so the rest of the game only uses these few calls.
+const Net = {
+  ready: false,
+  uid: null,
+  available() {
+    if (window.__FAKE_NET) return true;  // used by automated tests
+    const c = window.RACKO_FIREBASE_CONFIG;
+    return !!(c && c.apiKey && !/PASTE/i.test(c.apiKey));
+  },
+  configMissing: () => !window.__FAKE_NET && !window.RACKO_FIREBASE_CONFIG,
+  async init() {
+    if (this.ready) return;
+    if (window.__FAKE_NET) { Object.assign(this, await window.__FAKE_NET()); this.ready = true; return; }
+    if (!this.available()) throw new Error('Online play isn’t set up yet.');
+    const base = 'https://www.gstatic.com/firebasejs/12.19.0/';
+    const [appM, authM, dbM] = await Promise.all([
+      import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-database.js')
+    ]);
+    const app = appM.initializeApp(window.RACKO_FIREBASE_CONFIG);
+    const cred = await authM.signInAnonymously(authM.getAuth(app));  // no accounts: an anonymous ID per device
+    const db = dbM.getDatabase(app);
+    const r = (p) => dbM.ref(db, p);
+    this.uid = cred.user.uid;
+    this.get = async (p) => (await dbM.get(r(p))).val();
+    this.set = (p, v) => dbM.set(r(p), v);
+    this.update = (p, v) => dbM.update(r(p), v);
+    this.push = (p, v) => dbM.push(r(p), v);
+    this.remove = (p) => dbM.remove(r(p));
+    this.on = (p, cb) => dbM.onValue(r(p), (snap) => cb(snap.val()));
+    this.onChild = (p, cb) => dbM.onChildAdded(r(p), (snap) => cb(snap.key, snap.val()));
+    this.onDisconnectSet = (p, v) => dbM.onDisconnect(r(p)).set(v);
+    this.now = () => dbM.serverTimestamp();
+    this.ready = true;
+  }
+};
+
+const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';  // no I or O, so codes are easy to read aloud
+const Online = {
+  code: null, role: null, hostUid: null, unsubs: [],
+  players: {}, cpus: 0, lastSent: '', queue: Promise.resolve(),
+  path(p = '') { return `rooms/${this.code}${p ? '/' + p : ''}`; },
+  watch(path, cb) { this.unsubs.push(Net.on(path, cb)); },
+
+  async create(name) {
+    await Net.init();
+    let code = '';
+    for (let tries = 0; tries < 8; tries++) {
+      code = Array.from({ length: 4 }, () => CODE_LETTERS[Math.floor(Math.random() * CODE_LETTERS.length)]).join('');
+      if (!(await Net.get(`rooms/${code}/host`))) break;
+    }
+    this.code = code; this.role = 'host'; this.hostUid = Net.uid; this.cpus = 0;
+    await Net.set(this.path(), { host: Net.uid, status: 'lobby', cpus: 0, created: Net.now(), players: { [Net.uid]: { name, joined: Net.now(), online: true } } });
+    Net.onDisconnectSet(this.path(`players/${Net.uid}/online`), false);
+    this.watch(this.path('players'), (pl) => { this.players = pl || {}; this.onPlayers(); });
+  },
+
+  async join(code, name) {
+    await Net.init();
+    const room = await Net.get(`rooms/${code}`);
+    if (!room || room.status === 'closed') throw new Error('There’s no open room with that code. Check the letters and try again.');
+    const already = room.players && room.players[Net.uid];
+    if (room.status !== 'lobby' && !already) throw new Error('That game has already started.');
+    if (!already && Object.keys(room.players || {}).length + (room.cpus || 0) >= 4) throw new Error('That room is full. A game can have up to 4 players.');
+    this.code = code; this.role = 'guest'; this.hostUid = room.host;
+    await Net.update(this.path(`players/${Net.uid}`), { name, joined: already ? already.joined : Net.now(), online: true });
+    Net.onDisconnectSet(this.path(`players/${Net.uid}/online`), false);
+    this.watch(this.path('players'), (pl) => { this.players = pl || {}; this.onPlayers(); });
+    this.watch(this.path('cpus'), (n) => { this.cpus = n || 0; renderLobby(); });
+    this.watch(this.path('status'), (st) => { if (st === 'closed') this.ended('The host ended the game.'); });
+    this.watch(this.path('state'), (str) => { if (str) this.onState(str); });
+  },
+
+  onPlayers() {
+    const host = this.players[this.hostUid];
+    if (this.role === 'guest') {
+      const off = !host || host.online === false;
+      if (off !== S.hostOffline) { S.hostOffline = off; if (S.mode === 'client') renderAll(); }
+    }
+    if (this.role === 'host' && S.mode === 'host') {
+      // Keep each guest's online/offline status up to date during the game
+      let changed = false;
+      S.players.forEach((p) => {
+        if (p.kind !== 'remote') return;
+        const online = !!(this.players[p.uid] && this.players[p.uid].online !== false);
+        if (p.online !== online) { p.online = online; changed = true; }
+      });
+      if (changed) commit();
+    }
+    renderLobby();
+  },
+
+  setCpus(n) { this.cpus = n; if (this.role === 'host') Net.update(this.path(), { cpus: n }); renderLobby(); },
+
+  start(settings) {
+    const others = Object.entries(this.players)
+      .filter(([uid]) => uid !== Net.uid)
+      .sort((a, b) => (a[1].joined || 0) - (b[1].joined || 0));
+    const me = this.players[Net.uid] || { name: 'Host' };
+    const taken = new Set([me.name, ...others.map(([, p]) => p.name)]);
+    const cpuNames = NAMES.filter((n) => !taken.has(n)).concat(['Computer 1', 'Computer 2', 'Computer 3']);
+    const seats = [{ name: me.name, kind: 'local', uid: Net.uid },
+      ...others.map(([uid, p]) => ({ name: p.name, kind: 'remote', uid })),
+      ...Array.from({ length: this.cpus }, (_, k) => ({ name: cpuNames[k], kind: 'cpu' }))];
+    Net.update(this.path(), { status: 'playing' });
+    if (!this.listening) {
+      this.listening = true;
+      // Guests' moves arrive here, one at a time
+      this.unsubs.push(Net.onChild(this.path('actions'), (key, a) => {
+        Net.remove(this.path(`actions/${key}`));
+        this.queue = this.queue.then(() => this.handle(a)).catch(() => {});
+      }));
+    }
+    closeDialog(setupDlg);
+    newGame({ mode: 'host', seats, ...settings });
+  },
+
+  // Host: apply a guest's move if it's their turn.
+  async handle(a) {
+    if (!a || S.mode !== 'host') return;
+    const i = S.players.findIndex((p) => p.uid === a.uid && p.kind === 'remote');
+    if (i < 0 || i !== S.current) return;
+    while (S.busy) await sleep(60);
+    if (a.type === 'draw') await actDraw(i);
+    else if (a.type === 'take') await actTake(i);
+    else if (a.type === 'place') await actPlace(i, Number(a.slot));
+    else if (a.type === 'throw') await actThrow(i);
+    else if (a.type === 'call') actCall(i);
+    else if (a.type === 'keep') actKeep(i);
+  },
+
+  // Guest: send a move to the host.
+  send(type, slot = null) {
+    S.waiting = true; renderAll();
+    Net.push(this.path('actions'), { uid: Net.uid, type, slot });
+    clearTimeout(this.waitTimer);
+    this.waitTimer = setTimeout(() => { S.waiting = false; renderAll(); }, 4000);
+  },
+
+  // Guest: a new table state arrived from the host.
+  onState(str) {
+    this.latest = str;
+    this.queue = this.queue.then(() => this.applyLatest()).catch(() => {});
+  },
+  async applyLatest() {
+    if (!this.latest) return;
+    const snap = JSON.parse(this.latest);
+    this.latest = null;
+    const prevPhase = S.phase, prevCurrent = S.current, firstState = S.mode !== 'client';
+    if (firstState) { closeDialog(setupDlg); S.mode = 'client'; S.shownRound = -1; S.evtSeq = snap.evt ? snap.evt.seq - 1 : 0; }
+    Object.assign(S, {
+      players: snap.players, deck: new Array(snap.deckCount).fill(0), discard: snap.discard,
+      current: snap.current, phase: snap.phase, held: snap.held, heldBy: snap.heldBy, heldFrom: snap.heldFrom,
+      round: snap.round, max: snap.max, target: snap.target, bonus: snap.bonus, difficulty: snap.difficulty,
+      revealed: snap.revealed, log: snap.log, result: snap.result
+    });
+    S.mySeat = S.players.findIndex((p) => p.uid === Net.uid);
+    S.viewer = S.mySeat;
+    S.waiting = false; clearTimeout(this.waitTimer);
+    if (S.phase !== 'holding' && S.phase !== 'choose') clearHint();
+    updateStaticText();
+    if (snap.evt && snap.evt.seq > S.evtSeq) {
+      S.evtSeq = snap.evt.seq;
+      S.busy = true;
+      await animate(snap.evt);
+      S.busy = false;
+    }
+    if (S.phase === 'roundOver' && S.result && S.shownRound !== S.round) await showRackO(S.result.winner);
+    if (S.phase !== 'roundOver') closeDialog(roundDlg);
+    if (S.phase === 'decide' && S.current === S.mySeat && (prevPhase !== 'decide' || prevCurrent !== S.current)) Sound.chime();
+    renderAll();
+  },
+
+  ended(message) {
+    this.leave(true);
+    closeDialog(roundDlg); closeDialog(setupDlg);
+    $('#noticeText').textContent = message;
+    noticeDlg.showModal();
+  },
+
+  leave(quiet = false) {
+    if (!this.code) return;
+    this.unsubs.forEach((u) => { try { u(); } catch (e) {} });
+    this.unsubs = [];
+    this.listening = false;
+    if (this.role === 'host') Net.update(this.path(), { status: 'closed' });
+    else Net.update(this.path(`players/${Net.uid}`), { online: false });
+    this.code = null; this.role = null; this.players = {}; this.cpus = 0; this.lastSent = '';
+    S.hostOffline = false;
+    if (S.mode === 'host' || S.mode === 'client') {
+      S.token++; S.mode = 'solo'; S.players = []; S.phase = 'idle'; S.round = 0; S.viewer = 0; S.log = [];
+      renderAll();
+    }
+    if (!quiet) renderLobby();
+  }
+};
+
+// Host: send the whole table to the guests (only when something changed).
+function broadcast() {
+  if (S.mode !== 'host' || !Online.code) return;
+  const snap = {
+    players: S.players.map((p) => ({ name: p.name, kind: p.kind, uid: p.uid, rack: p.rack, score: p.score, online: p.online !== false })),
+    deckCount: S.deck.length, discard: S.discard, current: S.current, phase: S.phase,
+    held: S.held, heldBy: S.heldBy, heldFrom: S.heldFrom, round: S.round, max: S.max, target: S.target,
+    bonus: S.bonus, difficulty: S.difficulty, revealed: S.revealed, log: S.log, result: S.result, evt: S.evt
+  };
+  const str = JSON.stringify(snap);   // stored as text so empty lists survive the trip
+  if (str === Online.lastSent) return;
+  Online.lastSent = str;
+  Net.set(Online.path('state'), str);
+}
+
+/* ---------- 12. Dialogs ---------- */
+const setupDlg = $('#setupDlg'), helpDlg = $('#helpDlg'), roundDlg = $('#roundDlg'), passDlg = $('#passDlg'), noticeDlg = $('#noticeDlg');
+function closeDialog(d) { if (d.open) d.close(); }
 
 function radio(name, value) {
   const el = document.querySelector(`input[name="${name}"][value="${value}"]`);
@@ -1289,77 +1805,268 @@ function radioValue(name) {
   const el = document.querySelector(`input[name="${name}"]:checked`);
   return el ? el.value : null;
 }
-function updateDeckNote() {
-  const n = Number(radioValue('opp') || 1) + 1;
-  $('#deckNote').textContent = `${n} players use cards 1 to ${deckSizeFor(n)}.`;
+
+// Pass and play seats: [{ name, kind: 'local' | 'cpu' }]
+let passSeats = store.get('passSeats', [{ name: 'Player 1', kind: 'local' }, { name: 'Player 2', kind: 'local' }]);
+function renderSeats() {
+  const list = $('#seatList');
+  let cpuCount = 0;
+  list.innerHTML = passSeats.map((s, i) => {
+    const cpuName = NAMES[cpuCount] || `Computer ${cpuCount + 1}`;
+    if (s.kind === 'cpu') cpuCount++;
+    return `<li data-i="${i}">
+      <span class="num">${i + 1}</span>
+      <input type="text" class="seat-name" maxlength="14" value="${esc(s.kind === 'cpu' ? cpuName : s.name)}" ${s.kind === 'cpu' ? 'disabled' : ''} aria-label="Player ${i + 1} name">
+      <span class="seat-kind" role="group" aria-label="Player ${i + 1} type">
+        <button type="button" data-kind="local" aria-pressed="${s.kind === 'local'}">Person</button>
+        <button type="button" data-kind="cpu" aria-pressed="${s.kind === 'cpu'}">Computer</button>
+      </span>
+      <button type="button" class="seat-remove" ${passSeats.length <= 2 ? 'disabled' : ''} aria-label="Remove player ${i + 1}">Remove</button>
+    </li>`;
+  }).join('');
+  $('#addSeat').disabled = passSeats.length >= 4;
+  updateSetupNotes();
+}
+$('#seatList').addEventListener('input', (e) => {
+  const li = e.target.closest('li'); if (!li || !e.target.classList.contains('seat-name')) return;
+  passSeats[Number(li.dataset.i)].name = e.target.value;
+});
+$('#seatList').addEventListener('click', (e) => {
+  const li = e.target.closest('li'); if (!li) return;
+  const i = Number(li.dataset.i);
+  if (e.target.dataset.kind) {
+    passSeats[i].kind = e.target.dataset.kind;
+    if (passSeats[i].kind === 'local' && !passSeats[i].name) passSeats[i].name = `Player ${i + 1}`;
+    renderSeats();
+  } else if (e.target.classList.contains('seat-remove')) {
+    passSeats.splice(i, 1); renderSeats();
+  }
+});
+$('#addSeat').addEventListener('click', () => {
+  if (passSeats.length < 4) passSeats.push({ name: `Player ${passSeats.length + 1}`, kind: 'local' });
+  renderSeats();
+});
+
+function setupMode() { return radioValue('mode') || 'solo'; }
+
+function updateSetupNotes() {
+  const mode = setupMode();
+  let n = 2, cpus = 0;
+  if (mode === 'solo') { cpus = Number(radioValue('opp') || 1); n = cpus + 1; }
+  else if (mode === 'pass') { n = passSeats.length; cpus = passSeats.filter((s) => s.kind === 'cpu').length; }
+  else { n = Math.max(2, Object.keys(Online.players).length + Online.cpus); cpus = Online.cpus; }
+  $('#deckNote').textContent = `${n} players use cards 1 to ${deckSizeFor(Math.min(4, Math.max(2, n)))}.`;
+  $('#diffField').hidden = cpus === 0 && mode !== 'solo';
+}
+
+function renderSetup() {
+  const mode = setupMode();
+  const inRoom = !!Online.code && S.mode !== 'client' && S.mode !== 'host';
+  const guestWaiting = inRoom && Online.role === 'guest';
+  $('#soloOpts').hidden = mode !== 'solo';
+  $('#passOpts').hidden = mode !== 'pass';
+  $('#onlineOpts').hidden = mode !== 'online';
+  // Online availability
+  const ok = Net.available();
+  $('#onlineOff').hidden = ok;
+  $('#onlineOff').textContent = Net.configMissing()
+    ? 'Online rooms work in the website version of Rack-O, not in this copy. You can still play against the computer or pass and play.'
+    : 'Online play needs a one-time Firebase setup before it can be used. The README file explains how.';
+  $('#onlineStart').hidden = !ok || inRoom || mode !== 'online';
+  $('#lobby').hidden = !inRoom;
+  // Guests don't pick settings; the host does
+  $('#sharedOpts').hidden = mode === 'online' && (!inRoom || guestWaiting);
+  $('#setupStart').hidden = mode === 'online';
+  $('#startOnline').hidden = !(mode === 'online' && inRoom && Online.role === 'host');
+  $('#leaveRoom').hidden = !(mode === 'online' && inRoom);
+  $('#setupCancel').hidden = S.round === 0 || inRoom;
+  updateSetupNotes();
+}
+
+function renderLobby() {
+  if (!Online.code) { renderSetup(); return; }
+  $('#roomCode').textContent = Online.code;
+  const entries = Object.entries(Online.players).sort((a, b) => (a[1].joined || 0) - (b[1].joined || 0));
+  const hostName = (Online.players[Online.hostUid] || {}).name || 'the host';
+  $('#lobbyList').innerHTML = entries.map(([uid, p]) => {
+    const tags = [uid === Online.hostUid ? 'host' : '', uid === Net.uid ? 'you' : '', p.online === false ? 'offline' : ''].filter(Boolean).join(', ');
+    return `<li>${esc(p.name)}<span>${tags}</span></li>`;
+  }).join('') + Array.from({ length: Online.cpus }, (_, k) => `<li>Computer player<span>${k + 1}</span></li>`).join('');
+  const humans = entries.length;
+  $('#lobbyNote').textContent = Online.role === 'host'
+    ? 'Share this code with the other players. On their devices they choose Online, type the code, and tap Join.'
+    : `You’re in! Waiting for ${hostName} to start the game.`;
+  $('#lobbyCpu').hidden = Online.role !== 'host';
+  document.querySelectorAll('input[name="cpus"]').forEach((el) => {
+    el.disabled = humans + Number(el.value) > 4;
+    el.checked = Number(el.value) === Online.cpus;
+  });
+  const total = humans + Online.cpus;
+  $('#startOnline').disabled = total < 2 || total > 4;
+  $('#startOnline').textContent = total < 2 ? 'Waiting for players…' : 'Start the game';
+  renderSetup();
 }
 
 function openSetup() {
+  radio('mode', store.get('mode', 'solo'));
   radio('opp', store.get('opp', 1));
   radio('diff', store.get('diff', 'medium'));
   radio('target', store.get('target', 500));
   radio('rules', store.get('rules', 'classic'));
-  updateDeckNote();
-  $('#setupCancel').hidden = S.round === 0;
-  setupDlg.showModal();
+  $('#onlineName').value = store.get('onlineName', '');
+  $('#onlineMsg').textContent = '';
+  renderSeats();
+  renderSetup();
+  if (!setupDlg.open) setupDlg.showModal();
 }
 
-function showRoundSummary(rows, winner) {
-  const top = Math.max(...S.players.map((p) => p.score));
-  const over = top >= S.target;
-  const leaders = S.players.filter((p) => p.score === top);
-  let headline;
-  if (over) {
-    if (leaders.length > 1) headline = `It’s a tie at ${top} points between ${leaders.map((p) => p.name).join(' and ')}.`;
-    else headline = leaders[0].human ? `You win with ${top} points!` : `${leaders[0].name} wins with ${top} points.`;
+function sharedSettings() {
+  return {
+    difficulty: radioValue('diff') || 'medium',
+    target: Number(radioValue('target') || 500),
+    rules: radioValue('rules') || 'classic'
+  };
+}
+function saveSettings() {
+  const s = sharedSettings();
+  store.set('mode', setupMode()); store.set('opp', Number(radioValue('opp') || 1));
+  store.set('diff', s.difficulty); store.set('target', s.target); store.set('rules', s.rules);
+  store.set('passSeats', passSeats);
+}
+
+function startFromSetup() {
+  saveSettings();
+  if (Online.code) Online.leave(true);
+  const mode = setupMode(), settings = sharedSettings();
+  let seats;
+  if (mode === 'solo') {
+    const n = Number(radioValue('opp') || 1);
+    seats = [{ name: 'You', kind: 'local' }, ...NAMES.slice(0, n).map((name) => ({ name, kind: 'cpu' }))];
+  } else {
+    let cpuCount = 0;
+    seats = passSeats.map((s, i) => s.kind === 'cpu'
+      ? { name: NAMES[cpuCount++] || `Computer ${cpuCount}`, kind: 'cpu' }
+      : { name: (s.name || '').trim() || `Player ${i + 1}`, kind: 'local' });
   }
-  const body = rows.map(({ p, count, pts, win, run }) => {
+  closeDialog(setupDlg);
+  newGame({ mode, seats, ...settings });
+}
+
+function onlineName() {
+  const name = $('#onlineName').value.trim();
+  if (!name) { formMsg('Type your name first, so the other players know who you are.', true); $('#onlineName').focus(); return null; }
+  store.set('onlineName', name);
+  return name;
+}
+function formMsg(text, err = false) { const m = $('#onlineMsg'); m.textContent = text; m.classList.toggle('err', err); }
+
+async function createRoom() {
+  const name = onlineName(); if (!name) return;
+  saveSettings();
+  formMsg('Creating a room…');
+  try { await Online.create(name); formMsg(''); renderLobby(); }
+  catch (e) { formMsg(e.message && !/firebase/i.test(e.message) ? e.message : 'Couldn’t reach the game server. Check your internet connection and try again.', true); }
+}
+async function joinRoom() {
+  const name = onlineName(); if (!name) return;
+  const code = $('#joinCode').value.trim().toUpperCase();
+  if (!/^[A-Z]{4}$/.test(code)) { formMsg('Room codes are 4 letters.', true); $('#joinCode').focus(); return; }
+  saveSettings();
+  formMsg('Joining…');
+  try { await Online.join(code, name); formMsg(''); renderLobby(); }
+  catch (e) { Online.leave(true); formMsg(e.message && !/firebase/i.test(e.message) ? e.message : 'Couldn’t reach the game server. Check your internet connection and try again.', true); }
+}
+
+// Pass and play: cover the screen until the next person is holding the device.
+function passTo(i) {
+  return new Promise((resolve) => {
+    const name = S.players[i].name;
+    $('#passTitle').textContent = `Pass to ${name}`;
+    $('#passText').textContent = `Hand the device to ${name}. Everyone else, no peeking!`;
+    $('#passReady').textContent = `I’m ${name}, show my rack`;
+    $('#passReady').onclick = () => { passDlg.close(); resolve(); };
+    passDlg.showModal();
+  });
+}
+
+function showRoundSummary() {
+  const res = S.result;
+  if (!res) return;
+  const top = Math.max(...S.players.map((p) => p.score));
+  const winner = res.winner;
+  let headline = '';
+  if (res.over) {
+    if (res.leaders.length > 1) headline = `It’s a tie at ${top} points between ${res.leaders.map((i) => nameOf(i)).join(' and ')}.`;
+    else headline = nameOf(res.leaders[0]) === 'You' ? `You win with ${top} points!` : `${nameOf(res.leaders[0])} wins with ${top} points.`;
+  }
+  const body = S.players.map((p, i) => {
+    const row = res.rows[i];
     const runs = S.bonus ? runSlots(p.rack) : new Set();
-    const label = win ? (S.bonus && run >= 3 ? `Rack-O, run of ${run}` : 'Rack-O') : count;
-    return `
-    <tr class="${win ? 'win' : ''}">
-      <td><b>${p.name}</b>
-        <div class="seq">${p.rack.map((v, i) => `<i class="${i < count ? 'ok' : ''} ${runs.has(i) ? 'run' : ''}">${v}</i>`).join('')}</div></td>
+    const label = row.win ? (S.bonus && row.run >= 3 ? `Rack-O, run of ${row.run}` : 'Rack-O') : row.count;
+    return `<tr class="${row.win ? 'win' : ''}">
+      <td><b>${esc(nameOf(i))}</b>
+        <div class="seq">${p.rack.map((v, k) => `<i class="${k < row.count ? 'ok' : ''} ${runs.has(k) ? 'run' : ''}">${v}</i>`).join('')}</div></td>
       <td class="n">${label}</td>
-      <td class="n">+${pts}</td>
+      <td class="n">+${row.pts}</td>
       <td class="n"><b>${p.score}</b></td>
     </tr>`;
   }).join('');
+  const isGuest = S.mode === 'client';
+  const called = nameOf(winner) === 'You' ? 'You called Rack-O!' : `${nameOf(winner)} called Rack-O.`;
+  let actions;
+  if (res.over) actions = '<button class="btn" id="roundClose">Look at the table</button>' + (isGuest ? '<button class="btn primary" id="leaveGame">Leave game</button>' : '<button class="btn primary" id="playAgain">Play again</button>');
+  else actions = isGuest ? '<button class="btn" id="roundClose">Look at the table</button>' : '<button class="btn primary" id="nextRound">Deal next round</button>';
 
   $('#roundBody').innerHTML = `
-    <h2 id="roundTitle">${over ? 'Game over' : `Round ${S.round} results`}</h2>
-    <p class="lede">${winner.human ? 'You called Rack-O!' : `${winner.name} called Rack-O.`} ${over ? headline : `First to ${S.target} wins.`}</p>
+    <h2 id="roundTitle">${res.over ? 'Game over' : `Round ${S.round} results`}</h2>
+    <p class="lede">${esc(called)} ${esc(res.over ? headline : `First to ${S.target} wins.`)}</p>
     <div class="summary"><table>
       <thead><tr><th>Player</th><th class="n">In order</th><th class="n">Round</th><th class="n">Total</th></tr></thead>
       <tbody>${body}</tbody></table></div>
-    <div class="dlg-actions" style="margin-top:16px">
-      ${over ? '<button class="btn" id="roundClose">Look at the table</button><button class="btn primary" id="playAgain">Play again</button>'
-             : '<button class="btn primary" id="nextRound">Deal next round</button>'}
-    </div>`;
-  roundDlg.showModal();
-  if (over) {
-    if (leaders.length === 1 && leaders[0].human) { if (!S.matchMusicPlayed) Sound.matchWin(); }
-    else Sound.gameOver();
-  }
-  S.matchMusicPlayed = false;
+    ${isGuest && !res.over ? '<p class="seg-note" style="margin-top:12px">Waiting for the host to deal the next round.</p>' : ''}
+    <div class="dlg-actions" style="margin-top:16px">${actions}</div>`;
+  if (!roundDlg.open) roundDlg.showModal();
 
-  if (over) {
-    $('#roundClose').onclick = () => { roundDlg.close(); setStatus(`${headline} Start a new game whenever you’re ready.`); };
-    $('#playAgain').onclick = () => { roundDlg.close(); openSetup(); };
-  } else {
-    $('#nextRound').onclick = () => { roundDlg.close(); startRound(); };
-  }
+  const on = (id, fn) => { const b = $('#' + id); if (b) b.onclick = fn; };
+  on('roundClose', () => roundDlg.close());
+  on('nextRound', () => { roundDlg.close(); startRound(); });
+  on('playAgain', () => { roundDlg.close(); newGame(S.config); });
+  on('leaveGame', () => { roundDlg.close(); Online.leave(); openSetup(); });
 }
 
-// --- Event wiring ---
+/* ---------- 13. Event wiring and startup ---------- */
 els.deck.addEventListener('click', onDeckClick);
 els.discard.addEventListener('click', onDiscardClick);
 els.rack.addEventListener('click', (e) => {
-  const btn = e.target.closest('.slot');
+  const btn = e.target.closest('button.slot');
   if (btn) onSlotClick(Number(btn.dataset.i));
 });
 els.hintBtn.addEventListener('click', showHint);
+$('#callBtn').addEventListener('click', () => { if (S.phase === 'decide') act('call'); });
+$('#keepBtn').addEventListener('click', () => { if (S.phase === 'decide') act('keep'); });
+$('#takeoverBtn').addEventListener('click', () => takeOver(S.current));
 $('#helpBtn').addEventListener('click', () => helpDlg.showModal());
+$('#helpClose').addEventListener('click', () => helpDlg.close());
+$('#newBtn').addEventListener('click', openSetup);
+$('#noticeOk').addEventListener('click', () => { noticeDlg.close(); openSetup(); });
+
+document.querySelectorAll('input[name="mode"]').forEach((el) => el.addEventListener('change', () => { store.set('mode', setupMode()); renderSetup(); }));
+document.querySelectorAll('input[name="opp"]').forEach((el) => el.addEventListener('change', updateSetupNotes));
+document.querySelectorAll('input[name="cpus"]').forEach((el) => el.addEventListener('change', () => Online.setCpus(Number(el.value))));
+$('#setupCancel').addEventListener('click', () => setupDlg.close());
+$('#setupStart').addEventListener('click', startFromSetup);
+$('#createRoom').addEventListener('click', createRoom);
+$('#joinRoom').addEventListener('click', joinRoom);
+$('#joinCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') joinRoom(); });
+$('#joinCode').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, ''); });
+$('#leaveRoom').addEventListener('click', () => { Online.leave(); renderSetup(); });
+$('#startOnline').addEventListener('click', () => { saveSettings(); Online.start(sharedSettings()); });
+
+// The first setup, the pass screen and the round summary need a choice, so Escape doesn't dismiss them.
+setupDlg.addEventListener('cancel', (e) => { if (S.round === 0 || Online.code) e.preventDefault(); });
+roundDlg.addEventListener('cancel', (e) => e.preventDefault());
+passDlg.addEventListener('cancel', (e) => e.preventDefault());
+
 const soundBtn = $('#soundBtn');
 function renderSoundBtn() {
   soundBtn.textContent = Sound.enabled ? 'Sound on' : 'Sound off';
@@ -1370,34 +2077,10 @@ renderSoundBtn();
 // Browsers start audio only after a tap or click
 document.addEventListener('pointerdown', () => Sound.unlock(), { passive: true });
 document.addEventListener('keydown', () => Sound.unlock());
-$('#helpClose').addEventListener('click', () => helpDlg.close());
-$('#newBtn').addEventListener('click', openSetup);
-document.querySelectorAll('input[name="opp"]').forEach((el) => el.addEventListener('change', updateDeckNote));
-$('#setupCancel').addEventListener('click', () => setupDlg.close());
-$('#callBtn').addEventListener('click', () => { if (S.phase === 'decide') endRound(0); });
-$('#keepBtn').addEventListener('click', () => {
-  if (S.phase !== 'decide') return;
-  S.phase = 'idle';
-  addLog('You kept building for a bigger run.');
-  advanceTurn();
-});
-$('#setupStart').addEventListener('click', () => {
-  const settings = {
-    opponents: Number(radioValue('opp') || 1),
-    difficulty: radioValue('diff') || 'medium',
-    target: Number(radioValue('target') || 500),
-    rules: radioValue('rules') || 'classic'
-  };
-  store.set('rules', settings.rules);
-  store.set('opp', settings.opponents);
-  store.set('diff', settings.difficulty);
-  store.set('target', settings.target);
-  setupDlg.close();
-  newGame(settings);
-});
-// The first setup and the round summary need a choice, so Escape doesn't dismiss them.
-setupDlg.addEventListener('cancel', (e) => { if (S.round === 0) e.preventDefault(); });
-roundDlg.addEventListener('cancel', (e) => e.preventDefault());
+
+// Leaving the page: let the room know
+window.addEventListener('pagehide', () => { if (Online.code && Online.role === 'guest') Net.update(Online.path(`players/${Net.uid}`), { online: false }); });
+
 
 // --- Installable app ---
 // Offline support: the service worker caches the game the first time it loads.

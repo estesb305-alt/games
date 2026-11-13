@@ -1,10 +1,11 @@
 /* Rack-O service worker: makes the game work offline.
    When you change any file, bump VERSION so phones pick up the update. */
-const VERSION = 'rack-o-v4';
+const VERSION = 'rack-o-v5';
 const APP_FILES = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './firebase-config.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',
