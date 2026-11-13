@@ -89,6 +89,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .btn{font-weight:700;font-size:.92rem;border:2px solid var(--ink);background:var(--surface);color:var(--ink);border-radius:999px;padding:.45em 1.05em;cursor:pointer}
 .btn:hover{background:color-mix(in srgb,var(--ink) 8%,var(--surface))}
 .btn:disabled{opacity:.45;cursor:not-allowed}
+.btn[aria-pressed="false"]{border-style:dashed;color:var(--muted)}
 .btn.primary{background:var(--accent);border-color:var(--accent-ink);color:var(--accent-ink)}
 .btn.primary:hover{background:color-mix(in srgb,var(--accent) 85%,#fff)}
 
@@ -208,6 +209,17 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .slot.inorder .track{background:linear-gradient(var(--ok-soft),var(--ok-soft)),var(--groove)}
 .slot.inorder .bar.real{box-shadow:0 0 0 3px var(--ok),0 2px 0 rgba(0,0,0,.28)}
 .slot.inorder .slotnum{color:var(--ok)}
+/* Bonus mode: cards in a run of consecutive numbers get a gold underline */
+.slot.run .bar.real::after{content:"";position:absolute;left:11px;right:0;bottom:0;height:5px;background:var(--accent)}
+
+.run-note{display:block;width:100%;font-size:.86rem;color:var(--muted);font-weight:600}
+.run-note b{color:var(--ink)}
+.call-bar{display:flex;flex-direction:column;gap:8px;margin-top:14px;padding:12px;border-radius:14px;background:color-mix(in srgb,var(--accent) 16%,transparent);border:2px solid var(--accent)}
+.call-bar[hidden]{display:none}
+.call-bar p{margin:0;font-weight:600;font-size:.93rem}
+.call-bar .row{display:flex;gap:8px;flex-wrap:wrap}
+.call-bar .btn{flex:1;min-width:130px}
+.seq i.run{outline:2px solid var(--accent);outline-offset:-2px}
 .bar.ghost{opacity:0;border:2px dashed var(--accent);box-shadow:none;z-index:2;pointer-events:none}
 .rack.holding .slot:hover .bar.ghost,.rack.holding .slot:focus-visible .bar.ghost{opacity:.95}
 .rack.holding .slot:hover .bar.real,.rack.holding .slot:focus-visible .bar.real{opacity:.4}
@@ -275,6 +287,7 @@ legend{font-weight:800;margin-bottom:7px;padding:0}
     <div class="actions">
       <button class="btn" id="installBtn" hidden>Install app</button>
       <button class="btn" id="hintBtn" disabled>Hint</button>
+      <button class="btn" id="soundBtn" aria-pressed="true">Sound on</button>
       <button class="btn" id="helpBtn">How to play</button>
       <button class="btn primary" id="newBtn">New game</button>
     </div>
@@ -300,12 +313,20 @@ legend{font-weight:800;margin-bottom:7px;padding:0}
           <span>Your card</span>
         </div>
       </div>
+      <div class="call-bar" id="callBar" hidden>
+        <p id="callText"></p>
+        <div class="row">
+          <button class="btn primary" id="callBtn">Call Rack-O</button>
+          <button class="btn" id="keepBtn">Keep building</button>
+        </div>
+      </div>
     </section>
 
     <section class="player panel" aria-label="Your rack">
       <div class="rack-head">
         <h2>Your rack</h2>
         <span class="progress" id="progress"></span>
+        <span class="run-note" id="runNote" hidden></span>
       </div>
       <div class="scale" aria-hidden="true"><span></span><span><span>1, low</span><span id="scaleMax">40, high</span></span></div>
       <ol class="rack" id="rack"></ol>
@@ -349,6 +370,14 @@ legend{font-weight:800;margin-bottom:7px;padding:0}
       </div>
       <div class="seg-note">500 is the official score. Lower numbers make shorter games.</div>
     </fieldset>
+    <fieldset>
+      <legend>Scoring</legend>
+      <div class="seg">
+        <label><input type="radio" name="rules" value="classic"><span>Classic</span></label>
+        <label><input type="radio" name="rules" value="bonus"><span>Bonus runs</span></label>
+      </div>
+      <div class="seg-note">With bonus runs, going Rack-O with consecutive numbers like 24, 25, 26 earns 50 to 400 extra points, and you can keep building before you call it.</div>
+    </fieldset>
     <div class="dlg-actions">
       <button class="btn" id="setupCancel">Keep playing</button>
       <button class="btn primary" id="setupStart">Deal the cards</button>
@@ -365,6 +394,7 @@ legend{font-weight:800;margin-bottom:7px;padding:0}
       <li><b>Your turn.</b> Take the top card of the discard pile, or draw from the deck. A card from the discard pile has to go into your rack. A card from the deck can go in, or you can throw it away on the discard pile.</li>
       <li><b>Swapping.</b> Tap a slot to put your card there. The card it replaces goes face up on the discard pile. You can never rearrange the cards in your rack.</li>
       <li><b>Scoring.</b> You get 5 points for each card in order, counting from slot 1 until the order breaks. Calling Rack-O is worth 75 points. The first player to reach <span id="helpTarget">500</span> wins.</li>
+      <li><b>Bonus runs (optional).</b> A run is 3 or more consecutive numbers in a row, like 24, 25, 26. When bonus runs are on, the player who goes Rack-O adds a bonus for their longest run: 50 for 3 cards, 100 for 4, 200 for 5, and 400 for 6 or more. When your rack is in order, you choose whether to call Rack-O now or keep building a longer run, at the risk of someone else going out first. Cards in a run have a gold underline.</li>
       <li><b>Tip.</b> Put each card where its number belongs. With <span id="helpMax">40</span> cards, a card in the middle of that range belongs near the middle of your rack. The faint dots in your rack mark those spots, and the green slots are the ones already in order.</li>
     </ol>
     <p class="install-tip" id="iosTip" hidden>To install Rack-O on your iPhone or iPad, tap the Share button in Safari, then choose “Add to Home Screen.” It will open full screen and work offline.</p>
@@ -420,6 +450,120 @@ const store = {
   set(key, value) { try { localStorage.setItem('racko:' + key, JSON.stringify(value)); } catch (e) {} }
 };
 
+/* ---------- 1b. Sound effects and music ----------
+   Every sound is made on the fly with the Web Audio API, so there are no audio
+   files to download and everything works offline. Browsers only allow sound
+   after the player taps or clicks something, so the audio starts on first tap. */
+const Sound = (() => {
+  let ctx = null, master = null, noiseBuf = null;
+  let enabled = store.get('sound', true);
+  const hz = (midi) => 440 * Math.pow(2, (midi - 69) / 12);   // MIDI note number to frequency
+
+  function ready() {
+    if (!enabled) return null;
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = 0.55;
+      master.connect(ctx.destination);
+      // One second of white noise, reused for every paper/card sound
+      noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  // A burst of filtered noise: card flicks, swooshes and snaps.
+  function noise({ t = 0, dur = 0.08, type = 'bandpass', f0 = 2000, f1 = f0, q = 1, vol = 0.3 }) {
+    const c = ready(); if (!c) return;
+    const now = c.currentTime + t;
+    const src = c.createBufferSource(); src.buffer = noiseBuf;
+    const filt = c.createBiquadFilter(); filt.type = type; filt.Q.value = q;
+    filt.frequency.setValueAtTime(f0, now);
+    filt.frequency.exponentialRampToValueAtTime(f1, now + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(vol, now + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    src.connect(filt).connect(g).connect(master);
+    src.start(now, Math.random() * 0.8);
+    src.stop(now + dur + 0.05);
+  }
+
+  // A single musical note.
+  function tone({ t = 0, freq = 440, dur = 0.15, type = 'triangle', vol = 0.2, attack = 0.01, slideTo = null }) {
+    const c = ready(); if (!c) return;
+    const now = c.currentTime + t;
+    const osc = c.createOscillator(); osc.type = type;
+    osc.frequency.setValueAtTime(freq, now);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, now + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(vol, now + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    osc.connect(g).connect(master);
+    osc.start(now);
+    osc.stop(now + dur + 0.05);
+  }
+
+  // Play a list of [midiNote, startBeat, lengthInBeats] at a tempo, with a two-oscillator voice.
+  function melody(notes, beat, { vol = 0.16, t = 0 } = {}) {
+    for (const [n, at, len] of notes) {
+      tone({ t: t + at * beat, freq: hz(n), dur: len * beat + 0.08, type: 'triangle', vol });
+      tone({ t: t + at * beat, freq: hz(n), dur: len * beat * 0.8 + 0.05, type: 'square', vol: vol * 0.22 });
+    }
+  }
+
+  return {
+    get enabled() { return enabled; },
+    unlock() { ready(); },
+    toggle() {
+      enabled = !enabled;
+      store.set('sound', enabled);
+      if (enabled) ready();
+      return enabled;
+    },
+    // Cards dealt one at a time
+    deal(count = 10, gap = 0.045) {
+      for (let i = 0; i < count; i++) noise({ t: i * gap, dur: 0.045, f0: 3600 + Math.random() * 800, f1: 1700, q: 0.9, vol: 0.22 });
+    },
+    // Picking up a card: a quick upward swoosh
+    pickUp(v = 1) { noise({ dur: 0.17, f0: 800, f1: 3800, q: 0.7, vol: 0.28 * v }); },
+    // Dropping a card on the discard pile: a downward swoosh
+    discard(v = 1) { noise({ dur: 0.15, f0: 2800, f1: 650, q: 0.7, vol: 0.24 * v }); },
+    // A card snapping into a rack slot
+    place(v = 1) {
+      noise({ dur: 0.035, type: 'highpass', f0: 1800, q: 0.5, vol: 0.4 * v });
+      tone({ freq: 170, slideTo: 70, dur: 0.09, type: 'sine', vol: 0.4 * v, attack: 0.003 });
+    },
+    // The discard pile shuffled into a new deck
+    shuffle() { for (let i = 0; i < 20; i++) noise({ t: i * 0.024, dur: 0.03, f0: 4200, f1: 2600, q: 1, vol: 0.14 }); },
+    // A run of consecutive numbers got longer (bonus rules)
+    sparkle() { [84, 88, 91, 96].forEach((n, i) => tone({ t: i * 0.06, freq: hz(n), dur: 0.22, type: 'sine', vol: 0.1 })); },
+    // Your rack is in order: time to decide
+    chime() { [79, 84].forEach((n, i) => tone({ t: i * 0.12, freq: hz(n), dur: 0.5, type: 'sine', vol: 0.16 })); },
+    // You called Rack-O
+    fanfare() {
+      melody([[60,0,1],[64,1,1],[67,2,1],[72,3,2.5],[67,5.5,0.5],[72,6,3]], 0.11);
+      melody([[48,3,3],[55,6,3],[43,6,3]], 0.11, { vol: 0.1 });
+      [88, 91, 96, 100].forEach((n, i) => tone({ t: 0.66 + i * 0.07, freq: hz(n), dur: 0.3, type: 'sine', vol: 0.06 }));
+    },
+    // A computer player called Rack-O: bouncy, but clearly not your win
+    rival() { melody([[67,0,1],[64,1,1],[65,2,1],[62,3,1],[60,4,3]], 0.12, { vol: 0.13 }); },
+    // You won the whole game
+    victory() {
+      melody([[67,0,1],[67,1,1],[67,2,1],[64,3,2],[65,5,1],[67,6,1],[72,7,1],[71,8,1],[72,9,4]], 0.14);
+      melody([[48,0,3],[53,3,2],[55,5,2],[48,7,1],[43,8,1],[36,9,4]], 0.14, { vol: 0.1 });
+    },
+    // Someone else won the game
+    gameOver() { melody([[67,0,1],[66,1,1],[65,2,1],[64,3,4]], 0.2, { vol: 0.12 }); }
+  };
+})();
+
 /* ---------- 2. Game state ---------- */
 const RACK = 10;                         // slots per rack
 const NAMES = ['Otto', 'Mabel', 'Ruth']; // computer players
@@ -431,10 +575,11 @@ const S = {
   max: 40,          // highest card in this game's deck
   current: 0,       // whose turn it is (index into players)
   starter: -1,      // who started the current round
-  phase: 'idle',    // idle | choose | holding | ai | roundOver
+  phase: 'idle',    // idle | choose | holding | decide | ai | roundOver
   held: null,       // card the human is holding
   heldFrom: null,   // 'deck' or 'discard'
   difficulty: 'medium',
+  bonus: false,     // Bonus Rack-O rules (run bonuses and choosing when to call)
   target: 500,
   round: 0,
   revealed: false,  // show computer racks (end of round)
@@ -450,7 +595,7 @@ const els = {
   deck: $('#deck'), discard: $('#discard'), held: $('#held'),
   deckCount: $('#deckCount'), discardLabel: $('#discardLabel'),
   rack: $('#rack'), progress: $('#progress'), log: $('#log'),
-  hintBtn: $('#hintBtn'), celebrate: $('#celebrate'), announce: $('#announce')
+  hintBtn: $('#hintBtn'), callBar: $('#callBar'), callText: $('#callText'), runNote: $('#runNote'), celebrate: $('#celebrate'), announce: $('#announce')
 };
 
 /* ---------- 3. Rules helpers ---------- */
@@ -468,6 +613,36 @@ function inOrderCount(r) {
 }
 const isRackO = (r) => inOrderCount(r) === r.length;
 
+// Longest run of consecutive numbers next to each other (like 24, 25, 26).
+function runInfo(r) {
+  let bestStart = 0, bestLen = 1, start = 0;
+  for (let i = 1; i <= r.length; i++) {
+    if (i < r.length && r[i] === r[i - 1] + 1) continue;
+    if (i - start > bestLen) { bestLen = i - start; bestStart = start; }
+    start = i;
+  }
+  return { start: bestStart, length: bestLen };
+}
+const longestRun = (r) => runInfo(r).length;
+
+// Slots that belong to any run of 3 or more (for highlighting).
+function runSlots(r) {
+  const out = new Set();
+  let start = 0;
+  for (let i = 1; i <= r.length; i++) {
+    if (i < r.length && r[i] === r[i - 1] + 1) continue;
+    if (i - start >= 3) for (let k = start; k < i; k++) out.add(k);
+    start = i;
+  }
+  return out;
+}
+
+// Bonus Rack-O points for a run of this length.
+const runBonus = (len) => (len >= 6 ? 400 : len === 5 ? 200 : len === 4 ? 100 : len === 3 ? 50 : 0);
+
+// Points for going Rack-O with this rack.
+const rackOPoints = (r) => 75 + (S.bonus ? runBonus(longestRun(r)) : 0);
+
 
 // If the deck is empty, shuffle the discard pile (except its top card) into a new deck.
 function ensureDeck() {
@@ -476,6 +651,7 @@ function ensureDeck() {
   S.deck = shuffle(S.discard);
   S.discard = top == null ? [] : [top];
   addLog('The deck ran out, so the discard pile was shuffled into a new deck.');
+  Sound.shuffle();
 }
 
 /* ---------- 4. Computer strategies and hints ---------- */
@@ -562,9 +738,33 @@ const strategies = {
 // Thresholds: how much better a discard-pile card must be to take it, and a drawn card to keep it.
 const THRESH = { easy: { take: 0.5, keep: 0 }, medium: { take: 1.5, keep: 0.2 }, hard: { take: 1, keep: 1.2 } };
 
+// With a finished rack in bonus mode: the slot where this card keeps the rack
+// in order AND makes the longest run longer, or -1 if there isn't one.
+function runPlan(r, v) {
+  let slot = -1, best = longestRun(r);
+  for (let i = 0; i < RACK; i++) {
+    const copy = r.slice(); copy[i] = v;
+    if (!isRackO(copy)) continue;
+    const len = longestRun(copy);
+    if (len > best) { best = len; slot = i; }
+  }
+  return slot;
+}
+
+// Should a computer player with a finished rack call Rack-O now, or wait for a bigger run?
+function aiWantsToCall(p) {
+  const bonus = runBonus(longestRun(p.rack));
+  if (p.score + 75 + bonus >= S.target) return true; // calling wins the game
+  const waited = p.waited || 0;
+  if (S.difficulty === 'easy') return true;
+  if (S.difficulty === 'medium') return bonus >= 50 || waited >= 2;
+  return bonus >= 100 || (bonus >= 50 && waited >= 2) || waited >= 4;
+}
+
 // Returns the slot to use for the discard-pile card, or -1 to draw from the deck instead.
 function aiPlanDiscard(r, v, diff) {
   if (v == null) return -1;
+  if (S.bonus && isRackO(r)) return runPlan(r, v);
   const win = winningSlot(r, v);
   if (win >= 0 && (diff !== 'easy' || Math.random() < 0.8)) return win;
   const plan = strategies[diff](r, v);
@@ -574,6 +774,7 @@ function aiPlanDiscard(r, v, diff) {
 
 // Returns the slot for a card drawn from the deck, or -1 to discard it.
 function aiPlanDrawn(r, v, diff) {
+  if (S.bonus && isRackO(r)) return runPlan(r, v);
   const win = winningSlot(r, v);
   if (win >= 0 && (diff !== 'easy' || Math.random() < 0.8)) return win;
   const plan = strategies[diff](r, v);
@@ -582,7 +783,8 @@ function aiPlanDrawn(r, v, diff) {
 }
 
 /* ---------- 5. Round flow ---------- */
-function newGame({ opponents, difficulty, target }) {
+function newGame({ opponents, difficulty, target, rules }) {
+  S.bonus = rules === 'bonus';
   S.players = [{ name: 'You', human: true, rack: [], score: 0 }];
   for (let i = 0; i < opponents; i++) S.players.push({ name: NAMES[i], human: false, rack: [], score: 0 });
   S.max = deckSizeFor(S.players.length);
@@ -602,7 +804,7 @@ function startRound() {
   S.round++;
   S.starter = (S.starter + 1) % S.players.length;
   S.deck = shuffle(Array.from({ length: S.max }, (_, i) => i + 1));
-  S.players.forEach((p) => (p.rack = []));
+  S.players.forEach((p) => { p.rack = []; p.waited = 0; });
 
   // Deal one card at a time, filling slot 1 for everyone, then slot 2, and so on.
   for (let slot = 0; slot < RACK; slot++) {
@@ -615,13 +817,14 @@ function startRound() {
   S.current = S.starter;
   addLog(`Round ${S.round}: the cards are dealt.`);
   renderAll(true);
+  Sound.deal(RACK, reduceMotion ? 0.03 : 0.045);
   startTurn();
 }
 
 function startTurn() {
   const p = S.players[S.current];
   clearHint();
-  if (isRackO(p.rack)) { endRound(S.current); return; } // rare: dealt a perfect rack
+  if (!S.bonus && isRackO(p.rack)) { endRound(S.current); return; } // rare: dealt a perfect rack
   if (p.human) {
     S.phase = 'choose';
     setStatus(`Your turn. Draw from the deck or take the ${topDiscard()} from the discard pile.`);
@@ -633,10 +836,37 @@ function startTurn() {
   if (!p.human) runComputerTurn(S.current, S.token);
 }
 
+// Called after every turn. Ends the round on a finished rack, or in bonus mode
+// lets the player decide whether to call Rack-O or keep building.
 function nextTurn() {
-  if (isRackO(S.players[S.current].rack)) { endRound(S.current); return; }
+  const p = S.players[S.current];
+  if (isRackO(p.rack)) {
+    if (!S.bonus) { endRound(S.current); return; }
+    if (p.human) { offerCall(); return; }
+    if (aiWantsToCall(p)) { endRound(S.current); return; }
+    p.waited = (p.waited || 0) + 1;
+  }
+  advanceTurn();
+}
+function advanceTurn() {
   S.current = (S.current + 1) % S.players.length;
   startTurn();
+}
+
+// Bonus mode: the human's rack is in order, so show the call / keep building choice.
+function offerCall() {
+  const r = S.players[0].rack;
+  const run = longestRun(r), pts = rackOPoints(r);
+  S.phase = 'decide';
+  clearHint();
+  const runText = run >= 3 ? `Your longest run is ${run} cards, so calling now scores ${pts} points.` : `You don’t have a run of 3 yet, so calling now scores ${pts} points.`;
+  const next = run >= 6 ? '' : ` A run of ${Math.max(3, run + 1)} would be worth ${75 + runBonus(Math.max(3, run + 1))}.`;
+  els.callText.textContent = `Your rack is in order! ${runText}${next}`;
+  setStatus('Call Rack-O now, or keep building for a bigger run.');
+  Sound.chime();
+  renderAll();
+  $('#callBtn').textContent = `Call Rack-O (${pts} points)`;
+  $('#callBtn').focus();
 }
 
 async function endRound(winnerIdx) {
@@ -649,9 +879,11 @@ async function endRound(winnerIdx) {
 
   const rows = S.players.map((p, i) => {
     const count = inOrderCount(p.rack);
-    const pts = i === winnerIdx ? 75 : count * 5;
+    const win = i === winnerIdx;
+    const run = longestRun(p.rack);
+    const pts = win ? rackOPoints(p.rack) : count * 5;
     p.score += pts;
-    return { p, count, pts, win: i === winnerIdx };
+    return { p, count, pts, win, run };
   });
   renderAll();
   await celebrate(winner);
@@ -666,6 +898,7 @@ async function onDeckClick() {
   const v = S.deck.pop();
   clearHint();
   renderPiles();
+  Sound.pickUp();
   await fly({ from: els.deck, to: els.held, value: v });
   S.held = v; S.heldFrom = 'deck'; S.phase = 'holding'; S.anim = false;
   setStatus(`You drew a ${v}. Tap a slot to swap it in, or tap the discard pile to throw it away.`);
@@ -679,6 +912,7 @@ async function onDiscardClick() {
     const v = S.discard.pop();
     clearHint();
     renderPiles();
+    Sound.pickUp();
     await fly({ from: els.discard, to: els.held, value: v });
     S.held = v; S.heldFrom = 'discard'; S.phase = 'holding'; S.anim = false;
     setStatus(`You took the ${v}. Tap the slot you want to put it in.`);
@@ -689,6 +923,7 @@ async function onDiscardClick() {
     S.held = null;
     clearHint();
     renderPiles();
+    Sound.discard();
     await fly({ from: els.held, to: els.discard, value: v });
     S.discard.push(v);
     S.anim = false;
@@ -718,11 +953,15 @@ async function onSlotClick(i) {
   bar.style.visibility = 'hidden';
   const ghost = slotEl.querySelector('.bar.ghost'); if (ghost) ghost.remove();
 
+  const runBefore = longestRun(rack);
+  Sound.discard(0.8);
   await Promise.all([
     fly({ from: oldRect, to: els.discard, value: old }),
     fly({ from: els.held, to: newRect, value: v, delay: 90 })
   ]);
   rack[i] = v;
+  Sound.place();
+  if (S.bonus && longestRun(rack) >= 3 && longestRun(rack) > runBefore) Sound.sparkle();
   S.discard.push(old);
   S.anim = false;
   S.phase = 'idle';
@@ -730,7 +969,7 @@ async function onSlotClick(i) {
   renderAll();
   const placed = els.rack.children[i].querySelector('.bar.real');
   if (placed && !reduceMotion) placed.classList.add('pop');
-  if (isRackO(rack)) { endRound(0); return; }
+  if (isRackO(rack)) { nextTurn(); return; }
   await sleep(250);
   nextTurn();
 }
@@ -739,6 +978,21 @@ function showHint() {
   const me = S.players[0];
   if (!me || S.players[S.current] !== me) return;
   const r = me.rack;
+  if (S.bonus && isRackO(r) && (S.phase === 'choose' || S.phase === 'holding')) {
+    if (S.phase === 'choose') {
+      const t = topDiscard();
+      const slot = t == null ? -1 : runPlan(r, t);
+      if (slot >= 0) { S.hintPile = 'discard'; S.hintSlot = slot; setStatus(`Hint: take the ${t} and put it in slot ${slot + 1} to grow your run.`); }
+      else { S.hintPile = 'deck'; S.hintSlot = -1; setStatus(`Hint: draw from the deck. The ${t} wouldn’t grow your run.`); }
+    } else {
+      const slot = runPlan(r, S.held);
+      if (slot >= 0) { S.hintPile = null; S.hintSlot = slot; setStatus(`Hint: put the ${S.held} in slot ${slot + 1} to grow your run.`); }
+      else if (S.heldFrom === 'deck') { S.hintPile = 'discard'; S.hintSlot = -1; setStatus(`Hint: discard the ${S.held} to keep your rack in order.`); }
+      else { const plan = strategies.hard(r, S.held); S.hintPile = null; S.hintSlot = plan.slot; setStatus(`Hint: put the ${S.held} in slot ${plan.slot + 1}.`); }
+    }
+    renderAll();
+    return;
+  }
   if (S.phase === 'choose') {
     const t = topDiscard();
     const win = t == null ? -1 : winningSlot(r, t);
@@ -782,10 +1036,13 @@ async function runComputerTurn(idx, token) {
   if (takeSlot >= 0) {
     // Take the face-up card from the discard pile
     S.discard.pop(); renderPiles();
+    Sound.pickUp(0.6);
     await fly({ from: els.discard, to: row(takeSlot), value: t });
     if (stale()) return;
+    Sound.place(0.6);
     const old = p.rack[takeSlot];
     p.rack[takeSlot] = t;
+    Sound.discard(0.6);
     await fly({ from: row(takeSlot), to: els.discard, value: old });
     if (stale()) return;
     S.discard.push(old);
@@ -794,6 +1051,7 @@ async function runComputerTurn(idx, token) {
     // Draw a hidden card from the deck
     ensureDeck();
     const v = S.deck.pop(); renderPiles();
+    Sound.pickUp(0.6);
     await fly({ from: els.deck, to: miniRack(), value: v, back: true });
     if (stale()) return;
     await sleep(reduceMotion ? 100 : 350);
@@ -801,11 +1059,14 @@ async function runComputerTurn(idx, token) {
     if (slot >= 0) {
       const old = p.rack[slot];
       p.rack[slot] = v;
+      Sound.place(0.6);
+      Sound.discard(0.6);
       await fly({ from: row(slot), to: els.discard, value: old });
       if (stale()) return;
       S.discard.push(old);
       msg = `${p.name} drew from the deck, put it in slot ${slot + 1}, and discarded the ${old}.`;
     } else {
+      Sound.discard(0.6);
       await fly({ from: miniRack(), to: els.discard, value: v });
       if (stale()) return;
       S.discard.push(v);
@@ -835,6 +1096,7 @@ function renderAll(deal = false) {
   renderScores(); renderOpponents(); renderPiles(); renderRack(deal); renderLog();
   const myTurn = S.players[S.current] && S.players[S.current].human;
   els.hintBtn.disabled = !(myTurn && (S.phase === 'choose' || S.phase === 'holding'));
+  els.callBar.hidden = S.phase !== 'decide';
 }
 
 function renderScores() {
@@ -842,7 +1104,7 @@ function renderScores() {
     const turn = i === S.current && S.phase !== 'roundOver' && S.phase !== 'idle';
     return `<span class="chip ${turn ? 'turn' : ''}"><b>${p.name}</b><span class="pts">${p.score}</span></span>`;
   }).join('');
-  els.scores.innerHTML = chips + (S.players.length ? `<span class="goal-chip">Round ${S.round}, first to ${S.target}</span>` : '');
+  els.scores.innerHTML = chips + (S.players.length ? `<span class="goal-chip">Round ${S.round}, first to ${S.target}${S.bonus ? ', bonus runs' : ''}</span>` : '');
 }
 
 function renderOpponents() {
@@ -885,10 +1147,11 @@ function renderRack(deal = false) {
   const r = me.rack;
   const holding = S.phase === 'holding' && S.held != null;
   const count = inOrderCount(r);
+  const runs = S.bonus ? runSlots(r) : new Set();
   els.rack.classList.toggle('holding', holding);
   els.rack.classList.toggle('deal', deal && !reduceMotion);
   els.rack.innerHTML = r.map((v, i) => `
-    <li><button class="slot ${i < count ? 'inorder' : ''} ${S.hintSlot === i ? 'hinted' : ''}" data-i="${i}" ${holding ? '' : 'disabled'}
+    <li><button class="slot ${i < count ? 'inorder' : ''} ${runs.has(i) ? 'run' : ''} ${S.hintSlot === i ? 'hinted' : ''}" data-i="${i}" ${holding ? '' : 'disabled'}
       aria-label="Slot ${i + 1}, ${v}${i < count ? ', in order' : ''}${holding ? `. Swap in the ${S.held}` : ''}">
       <span class="slotnum">${i + 1}</span>
       <span class="track">
@@ -899,6 +1162,13 @@ function renderRack(deal = false) {
     </button></li>`).join('');
   els.progress.classList.toggle('good', count >= 5);
   els.progress.textContent = isRackO(r) ? 'All 10 in order!' : `${count} in order, worth ${count * 5} points`;
+  els.runNote.hidden = !S.bonus;
+  if (S.bonus) {
+    const run = longestRun(r);
+    els.runNote.innerHTML = run >= 3
+      ? `Longest run: <b>${run} cards</b>, worth +${runBonus(run)} if you go Rack-O`
+      : 'No run of 3 yet. Consecutive numbers like 24, 25, 26 earn a bonus.';
+  }
 }
 
 function renderLog() { els.log.innerHTML = S.log.map((t) => `<li>${t}</li>`).join(''); }
@@ -934,8 +1204,11 @@ function celebrate(winner) {
 
     const burst = document.createElement('div'); burst.className = 'burst';
     const stamp = document.createElement('div'); stamp.className = 'stamp';
-    stamp.innerHTML = `Rack-O!<small>${winner.human ? 'You called it' : winner.name + ' called it'}</small>`;
+    const run = longestRun(winner.rack);
+    const runText = S.bonus && run >= 3 ? `, with a run of ${run}` : '';
+    stamp.innerHTML = `Rack-O!<small>${winner.human ? 'You called it' : winner.name + ' called it'}${runText}</small>`;
     ov.append(burst, stamp);
+    if (winner.human) Sound.fanfare(); else Sound.rival();
 
     if (!reduceMotion) {
       burst.animate([{ transform: 'scale(.2) rotate(0deg)', opacity: 0 }, { transform: 'scale(1) rotate(60deg)', opacity: 1 }],
@@ -983,6 +1256,7 @@ function openSetup() {
   radio('opp', store.get('opp', 1));
   radio('diff', store.get('diff', 'medium'));
   radio('target', store.get('target', 500));
+  radio('rules', store.get('rules', 'classic'));
   updateDeckNote();
   $('#setupCancel').hidden = S.round === 0;
   setupDlg.showModal();
@@ -997,14 +1271,18 @@ function showRoundSummary(rows, winner) {
     if (leaders.length > 1) headline = `It’s a tie at ${top} points between ${leaders.map((p) => p.name).join(' and ')}.`;
     else headline = leaders[0].human ? `You win with ${top} points!` : `${leaders[0].name} wins with ${top} points.`;
   }
-  const body = rows.map(({ p, count, pts, win }) => `
+  const body = rows.map(({ p, count, pts, win, run }) => {
+    const runs = S.bonus ? runSlots(p.rack) : new Set();
+    const label = win ? (S.bonus && run >= 3 ? `Rack-O, run of ${run}` : 'Rack-O') : count;
+    return `
     <tr class="${win ? 'win' : ''}">
       <td><b>${p.name}</b>
-        <div class="seq">${p.rack.map((v, i) => `<i class="${i < count ? 'ok' : ''}">${v}</i>`).join('')}</div></td>
-      <td class="n">${win ? 'Rack-O' : count}</td>
+        <div class="seq">${p.rack.map((v, i) => `<i class="${i < count ? 'ok' : ''} ${runs.has(i) ? 'run' : ''}">${v}</i>`).join('')}</div></td>
+      <td class="n">${label}</td>
       <td class="n">+${pts}</td>
       <td class="n"><b>${p.score}</b></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   $('#roundBody').innerHTML = `
     <h2 id="roundTitle">${over ? 'Game over' : `Round ${S.round} results`}</h2>
@@ -1017,6 +1295,7 @@ function showRoundSummary(rows, winner) {
              : '<button class="btn primary" id="nextRound">Deal next round</button>'}
     </div>`;
   roundDlg.showModal();
+  if (over) { if (leaders.length === 1 && leaders[0].human) Sound.victory(); else Sound.gameOver(); }
 
   if (over) {
     $('#roundClose').onclick = () => { roundDlg.close(); setStatus(`${headline} Start a new game whenever you’re ready.`); };
@@ -1035,16 +1314,35 @@ els.rack.addEventListener('click', (e) => {
 });
 els.hintBtn.addEventListener('click', showHint);
 $('#helpBtn').addEventListener('click', () => helpDlg.showModal());
+const soundBtn = $('#soundBtn');
+function renderSoundBtn() {
+  soundBtn.textContent = Sound.enabled ? 'Sound on' : 'Sound off';
+  soundBtn.setAttribute('aria-pressed', String(Sound.enabled));
+}
+soundBtn.addEventListener('click', () => { Sound.toggle(); renderSoundBtn(); if (Sound.enabled) Sound.place(); });
+renderSoundBtn();
+// Browsers start audio only after a tap or click
+document.addEventListener('pointerdown', () => Sound.unlock(), { passive: true });
+document.addEventListener('keydown', () => Sound.unlock());
 $('#helpClose').addEventListener('click', () => helpDlg.close());
 $('#newBtn').addEventListener('click', openSetup);
 document.querySelectorAll('input[name="opp"]').forEach((el) => el.addEventListener('change', updateDeckNote));
 $('#setupCancel').addEventListener('click', () => setupDlg.close());
+$('#callBtn').addEventListener('click', () => { if (S.phase === 'decide') endRound(0); });
+$('#keepBtn').addEventListener('click', () => {
+  if (S.phase !== 'decide') return;
+  S.phase = 'idle';
+  addLog('You kept building for a bigger run.');
+  advanceTurn();
+});
 $('#setupStart').addEventListener('click', () => {
   const settings = {
     opponents: Number(radioValue('opp') || 1),
     difficulty: radioValue('diff') || 'medium',
-    target: Number(radioValue('target') || 500)
+    target: Number(radioValue('target') || 500),
+    rules: radioValue('rules') || 'classic'
   };
+  store.set('rules', settings.rules);
   store.set('opp', settings.opponents);
   store.set('diff', settings.difficulty);
   store.set('target', settings.target);
