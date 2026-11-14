@@ -4,9 +4,9 @@
       Firebase shows you (keep the "window.RACKO_FIREBASE_CONFIG =" part).
    Until you do, online play stays off and everything else works normally. */
 window.RACKO_FIREBASE_CONFIG = {
-  apiKey: "PASTE_YOUR_API_KEY",
-  authDomain: "",
-  databaseURL: "",
-  projectId: "",
-  appId: ""
+  apiKey: "AIzaSyAKDNJOkXhvei6iXbJ7a_CoP4RkFLGDlcM",
+  authDomain: "rack-o-f516f.firebaseapp.com",
+  databaseURL: "https://rack-o-f516f-default-rtdb.firebaseio.com",
+  projectId: "rack-o-f516f",
+  appId: "1:992443571766:web:ee2a33bf6403e46468c297"
 };
