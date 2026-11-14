@@ -1,6 +1,6 @@
 /* Rack-O service worker: makes the game work offline.
    When you change any file, bump VERSION so phones pick up the update. */
-const VERSION = 'rack-o-v5';
+const VERSION = 'rack-o-v6';
 const APP_FILES = [
   './',
   './index.html',

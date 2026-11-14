@@ -308,6 +308,38 @@ input[type="text"]:disabled{opacity:.6}
 .pass-dlg{text-align:center}
 .pass-dlg h2{font-size:2rem}
 .pass-dlg .dlg-actions{justify-content:center}
+/* ---------- Multiplayer ---------- */
+input[type="text"]{font:inherit;font-weight:600;padding:.5em .75em;border:2px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);min-width:0}
+input[type="text"]:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+input[type="text"]:disabled{opacity:.6}
+.field{display:grid;gap:6px;margin-bottom:14px;font-weight:800}
+.seat-list{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}
+.seat-list li{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seat-list .seat-name{flex:1 1 9em}
+.seat-list .num{font-family:var(--display);color:var(--muted);text-align:center;width:1.4em}
+.seat-kind{display:flex;border:2px solid var(--line);border-radius:999px;overflow:hidden}
+.seat-kind button{border:none;background:none;padding:.38em .75em;font-weight:700;font-size:.85rem;cursor:pointer;color:var(--muted)}
+.seat-kind button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.seat-remove{border:none;background:none;color:var(--muted);font-weight:700;cursor:pointer;padding:.3em .4em;text-decoration:underline}
+.seat-remove:disabled{visibility:hidden}
+.online-choice{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px}
+.online-choice > div{display:grid;gap:8px;align-content:start;padding:12px;border:2px solid var(--line);border-radius:14px}
+.join-row{display:flex;gap:6px}
+.join-row input{width:5.5em;text-transform:uppercase;letter-spacing:.12em;font-family:var(--display);font-weight:400}
+@media (max-width:480px){.online-choice{grid-template-columns:1fr}}
+.form-msg{min-height:1.3em;margin:6px 0 10px;font-weight:600;color:var(--muted)}
+.form-msg.err{color:hsl(8 70% 48%)}
+.room-code{margin:0 0 4px;font-weight:700;color:var(--muted)}
+.room-code b{display:block;font-family:var(--display);font-weight:400;font-size:2.6rem;letter-spacing:.14em;color:var(--ink);line-height:1.1}
+.lobby-list{list-style:none;margin:10px 0 14px;padding:0;display:grid;gap:6px}
+.lobby-list li{display:flex;justify-content:space-between;gap:8px;padding:.5em .8em;border-radius:10px;background:color-mix(in srgb,var(--ink) 6%,transparent);font-weight:700}
+.lobby-list li span{color:var(--muted);font-weight:600}
+.opp-tag{font-size:.74rem;color:var(--muted);font-weight:600}
+.opp.offline{opacity:.6}
+.rack.hidden-rack .track{background:repeating-linear-gradient(135deg,var(--groove) 0 10px,color-mix(in srgb,var(--groove) 80%,#000) 10px 20px)}
+.pass-dlg{text-align:center}
+.pass-dlg h2{font-size:2rem}
+.pass-dlg .dlg-actions{justify-content:center}
 </style>
 </head>
 <body>
@@ -752,6 +784,7 @@ const S = {
   busy: false,      // true while this device is animating a move
   waiting: false,   // online guest: an action was sent and the host hasn't answered yet
   hostOffline: false,
+  netError: '',     // online connection problem to show in the status line
   token: 0,         // changes when a round starts, cancels stale computer turns
   evtSeq: 0,        // numbers each move so online guests can animate it once
   evt: null,        // the latest move
@@ -1253,7 +1286,8 @@ async function runComputerTurn(i, token) {
 async function present(e) {
   S.evt = { ...e, seq: ++S.evtSeq };
   broadcast();
-  await animate(S.evt);
+  try { await animate(S.evt); }
+  catch (err) { console.error('Rack-O: animation failed', err); S.anim = {}; }
   if (e.type !== 'rackO') renderAll();
 }
 
@@ -1358,6 +1392,7 @@ function describe(e) {
 }
 
 function statusText() {
+  if (S.netError) return S.netError;
   if (S.hintText) return S.hintText;
   if (!S.players.length) return 'Choose your game settings to start.';
   if (S.mode === 'client' && S.hostOffline) return 'The host lost connection. Waiting for them to come back…';
@@ -1531,7 +1566,8 @@ function fly({ from, to, value, back = false, delay = 0, duration = 480 }) {
     { offset: 0.5, transform: 'rotate(-7deg) scale(1.1)' },
     { left: b.left + 'px', top: b.top + 'px', width: b.width + 'px', height: b.height + 'px', transform: 'rotate(0deg) scale(1)' }
   ], { duration: reduceMotion ? 1 : duration, delay: reduceMotion ? 0 : delay, easing: 'cubic-bezier(.3,.7,.2,1)', fill: 'forwards' });
-  return anim.finished.then(() => el.remove(), () => el.remove());
+  const wait = reduceMotion ? 50 : duration + delay + 400;
+  return Promise.race([anim.finished.catch(() => {}), sleep(wait)]).then(() => el.remove());
 }
 
 // Big "Rack-O!" moment with falling cards. music: 'round', 'match' or 'rival'.
@@ -1601,16 +1637,20 @@ const Net = {
       import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-database.js')
     ]);
     const app = appM.initializeApp(window.RACKO_FIREBASE_CONFIG);
-    const cred = await authM.signInAnonymously(authM.getAuth(app));  // no accounts: an anonymous ID per device
+    // No accounts: each browser tab gets its own anonymous ID, kept if that tab reloads.
+    // (Shared storage would make two tabs in one browser look like the same player.)
+    const auth = authM.initializeAuth(app, { persistence: authM.browserSessionPersistence });
+    const cred = await authM.signInAnonymously(auth);
     const db = dbM.getDatabase(app);
     const r = (p) => dbM.ref(db, p);
     this.uid = cred.user.uid;
+    const report = (what) => (err) => { Online.netError(what, err); throw err; };
     this.get = async (p) => (await dbM.get(r(p))).val();
-    this.set = (p, v) => dbM.set(r(p), v);
-    this.update = (p, v) => dbM.update(r(p), v);
-    this.push = (p, v) => dbM.push(r(p), v);
-    this.remove = (p) => dbM.remove(r(p));
-    this.on = (p, cb) => dbM.onValue(r(p), (snap) => cb(snap.val()));
+    this.set = (p, v) => dbM.set(r(p), v).catch(report('save the game'));
+    this.update = (p, v) => dbM.update(r(p), v).catch(report('update the room'));
+    this.push = (p, v) => dbM.push(r(p), v).catch(report('send your move'));
+    this.remove = (p) => dbM.remove(r(p)).catch(() => {});
+    this.on = (p, cb) => dbM.onValue(r(p), (snap) => cb(snap.val()), (err) => Online.netError('receive updates', err));
     this.onChild = (p, cb) => dbM.onChildAdded(r(p), (snap) => cb(snap.key, snap.val()));
     this.onDisconnectSet = (p, v) => dbM.onDisconnect(r(p)).set(v);
     this.now = () => dbM.serverTimestamp();
@@ -1623,6 +1663,17 @@ const Online = {
   code: null, role: null, hostUid: null, unsubs: [],
   players: {}, cpus: 0, lastSent: '', queue: Promise.resolve(),
   path(p = '') { return `rooms/${this.code}${p ? '/' + p : ''}`; },
+  // Show a connection problem on screen (and in the browser console) instead of failing silently.
+  netError(what, err) {
+    console.error('Rack-O online: could not ' + what, err);
+    const denied = err && /permission/i.test(String(err.code || err.message));
+    S.netError = denied
+      ? `The game server refused to ${what}. Check that the Firebase rules from database.rules.json are published.`
+      : `Couldn’t ${what}. Check your internet connection.`;
+    renderAll();
+    clearTimeout(this.errTimer);
+    this.errTimer = setTimeout(() => { S.netError = ''; renderAll(); }, 8000);
+  },
   watch(path, cb) { this.unsubs.push(Net.on(path, cb)); },
 
   async create(name) {
@@ -1633,6 +1684,7 @@ const Online = {
       if (!(await Net.get(`rooms/${code}/host`))) break;
     }
     this.code = code; this.role = 'host'; this.hostUid = Net.uid; this.cpus = 0;
+    S.token++;   // stop any computer turns from a game that was open before
     await Net.set(this.path(), { host: Net.uid, status: 'lobby', cpus: 0, created: Net.now(), players: { [Net.uid]: { name, joined: Net.now(), online: true } } });
     Net.onDisconnectSet(this.path(`players/${Net.uid}/online`), false);
     this.watch(this.path('players'), (pl) => { this.players = pl || {}; this.onPlayers(); });
@@ -1645,7 +1697,9 @@ const Online = {
     const already = room.players && room.players[Net.uid];
     if (room.status !== 'lobby' && !already) throw new Error('That game has already started.');
     if (!already && Object.keys(room.players || {}).length + (room.cpus || 0) >= 4) throw new Error('That room is full. A game can have up to 4 players.');
+    if (room.host === Net.uid) throw new Error('You created this room, so you’re already in it. To test with two players, use a second device or a private/incognito window.');
     this.code = code; this.role = 'guest'; this.hostUid = room.host;
+    S.token++;   // stop any computer turns from a game that was open before
     await Net.update(this.path(`players/${Net.uid}`), { name, joined: already ? already.joined : Net.now(), online: true });
     Net.onDisconnectSet(this.path(`players/${Net.uid}/online`), false);
     this.watch(this.path('players'), (pl) => { this.players = pl || {}; this.onPlayers(); });
@@ -1691,7 +1745,7 @@ const Online = {
       // Guests' moves arrive here, one at a time
       this.unsubs.push(Net.onChild(this.path('actions'), (key, a) => {
         Net.remove(this.path(`actions/${key}`));
-        this.queue = this.queue.then(() => this.handle(a)).catch(() => {});
+        this.queue = this.queue.then(() => this.handle(a)).catch((err) => console.error('Rack-O online: a move failed', err));
       }));
     }
     closeDialog(setupDlg);
@@ -1723,7 +1777,12 @@ const Online = {
   // Guest: a new table state arrived from the host.
   onState(str) {
     this.latest = str;
-    this.queue = this.queue.then(() => this.applyLatest()).catch(() => {});
+    this.queue = this.queue.then(() => this.applyLatest()).catch((err) => {
+      // Never let one bad update freeze the guest's screen
+      console.error('Rack-O online: update failed', err);
+      S.busy = false; S.anim = {};
+      try { renderAll(); } catch (e) {}
+    });
   },
   async applyLatest() {
     if (!this.latest) return;
@@ -1745,8 +1804,9 @@ const Online = {
     if (snap.evt && snap.evt.seq > S.evtSeq) {
       S.evtSeq = snap.evt.seq;
       S.busy = true;
-      await animate(snap.evt);
-      S.busy = false;
+      try { await animate(snap.evt); }
+      catch (err) { console.error('Rack-O online: animation failed', err); }
+      finally { S.busy = false; S.anim = {}; }
     }
     if (S.phase === 'roundOver' && S.result && S.shownRound !== S.round) await showRackO(S.result.winner);
     if (S.phase !== 'roundOver') closeDialog(roundDlg);
